@@ -1,0 +1,59 @@
+{
+  "1": {
+    "inputs": {
+      "image": "Flux2-Klein_00359_.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "2": {
+    "inputs": {
+      "precision": "auto"
+    },
+    "class_type": "LoadSharpModel",
+    "_meta": {
+      "title": "(Down)Load SHARP Model"
+    }
+  },
+  "4": {
+    "inputs": {
+      "preview_gaussian": "",
+      "ply_path": [
+        "5",
+        0
+      ],
+      "extrinsics": [
+        "5",
+        1
+      ],
+      "intrinsics": [
+        "5",
+        2
+      ]
+    },
+    "class_type": "GeomPackPreviewGaussian",
+    "_meta": {
+      "title": "Preview Gaussian"
+    }
+  },
+  "5": {
+    "inputs": {
+      "focal_length_mm": 35,
+      "output_prefix": "sharp",
+      "model": [
+        "2",
+        0
+      ],
+      "image": [
+        "1",
+        0
+      ]
+    },
+    "class_type": "SharpPredict",
+    "_meta": {
+      "title": "SHARP Predict (Image to PLY)"
+    }
+  }
+}

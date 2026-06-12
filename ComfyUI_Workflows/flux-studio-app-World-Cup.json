@@ -1,0 +1,651 @@
+{
+  "9": {
+    "inputs": {
+      "filename_prefix": "Flux2-Klein",
+      "images": [
+        "75:65",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "76": {
+    "inputs": {
+      "image": "WhatsApp Image 2026-06-10 at 6.46.48 PM.jpeg"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "343": {
+    "inputs": {
+      "direction": "up",
+      "match_image_size": true,
+      "image1": [
+        "367",
+        0
+      ],
+      "image2": [
+        "366",
+        0
+      ]
+    },
+    "class_type": "ImageConcanate",
+    "_meta": {
+      "title": "Image Concatenate"
+    }
+  },
+  "344": {
+    "inputs": {
+      "images": [
+        "343",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  },
+  "350": {
+    "inputs": {
+      "width": [
+        "353",
+        0
+      ],
+      "height": [
+        "353",
+        1
+      ],
+      "color": "#808080"
+    },
+    "class_type": "LayerUtility: ColorImage",
+    "_meta": {
+      "title": "LayerUtility: ColorImage"
+    }
+  },
+  "351": {
+    "inputs": {
+      "x": 0,
+      "y": 0,
+      "resize_source": false,
+      "destination": [
+        "350",
+        0
+      ],
+      "source": [
+        "76",
+        0
+      ],
+      "mask": [
+        "354",
+        1
+      ]
+    },
+    "class_type": "ImageCompositeMasked",
+    "_meta": {
+      "title": "ImageCompositeMasked"
+    }
+  },
+  "352": {
+    "inputs": {
+      "images": [
+        "351",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  },
+  "353": {
+    "inputs": {
+      "image": [
+        "354",
+        0
+      ]
+    },
+    "class_type": "GetImageSize",
+    "_meta": {
+      "title": "Get Image Size"
+    }
+  },
+  "354": {
+    "inputs": {
+      "model": "RMBG-2.0",
+      "sensitivity": 1,
+      "process_res": 1024,
+      "mask_blur": 0,
+      "mask_offset": 0,
+      "invert_output": false,
+      "refine_foreground": false,
+      "background": "Alpha",
+      "background_color": "#222222",
+      "image": [
+        "76",
+        0
+      ]
+    },
+    "class_type": "RMBG",
+    "_meta": {
+      "title": "Remove Background (RMBG)"
+    }
+  },
+  "360": {
+    "inputs": {
+      "image": "uzbekistan 2026 kits (1).jpg"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "366": {
+    "inputs": {
+      "direction": "left",
+      "match_image_size": true,
+      "image1": [
+        "75:332",
+        0
+      ],
+      "image2": [
+        "76",
+        0
+      ]
+    },
+    "class_type": "ImageConcanate",
+    "_meta": {
+      "title": "Image Concatenate"
+    }
+  },
+  "367": {
+    "inputs": {
+      "direction": "left",
+      "match_image_size": true,
+      "image1": [
+        "75:65",
+        0
+      ],
+      "image2": [
+        "75:358",
+        0
+      ]
+    },
+    "class_type": "ImageConcanate",
+    "_meta": {
+      "title": "Image Concatenate"
+    }
+  },
+  "368": {
+    "inputs": {
+      "filename_prefix": "WorldCup-",
+      "images": [
+        "343",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "75:61": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "KSamplerSelect"
+    }
+  },
+  "75:64": {
+    "inputs": {
+      "noise": [
+        "75:73",
+        0
+      ],
+      "guider": [
+        "75:63",
+        0
+      ],
+      "sampler": [
+        "75:61",
+        0
+      ],
+      "sigmas": [
+        "75:62",
+        0
+      ],
+      "latent_image": [
+        "75:66",
+        0
+      ]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": {
+      "title": "SamplerCustomAdvanced"
+    }
+  },
+  "75:65": {
+    "inputs": {
+      "samples": [
+        "75:64",
+        0
+      ],
+      "vae": [
+        "75:72",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "75:73": {
+    "inputs": {
+      "noise_seed": 699697265071086
+    },
+    "class_type": "RandomNoise",
+    "_meta": {
+      "title": "RandomNoise"
+    }
+  },
+  "75:70": {
+    "inputs": {
+      "unet_name": "flux-2-klein-9b-fp8.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Load Diffusion Model"
+    }
+  },
+  "75:71": {
+    "inputs": {
+      "clip_name": "qwen_3_8b_fp4mixed.safetensors",
+      "type": "flux2",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Load CLIP"
+    }
+  },
+  "75:66": {
+    "inputs": {
+      "width": 768,
+      "height": 1344,
+      "batch_size": 1
+    },
+    "class_type": "EmptyFlux2LatentImage",
+    "_meta": {
+      "title": "Empty Flux 2 Latent"
+    }
+  },
+  "75:63": {
+    "inputs": {
+      "cfg": 1,
+      "model": [
+        "75:345",
+        0
+      ],
+      "positive": [
+        "75:345",
+        1
+      ],
+      "negative": [
+        "75:365:362",
+        0
+      ]
+    },
+    "class_type": "CFGGuider",
+    "_meta": {
+      "title": "CFGGuider"
+    }
+  },
+  "75:62": {
+    "inputs": {
+      "steps": 4,
+      "width": 1024,
+      "height": 1024
+    },
+    "class_type": "Flux2Scheduler",
+    "_meta": {
+      "title": "Flux2Scheduler"
+    }
+  },
+  "75:72": {
+    "inputs": {
+      "vae_name": "flux2-vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "75:74": {
+    "inputs": {
+      "text": "Replace the environment with a soccer stadium. \nChange the outfits to match exactly the third image's reference soccer outfit",
+      "clip": [
+        "75:71",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Positive Prompt)"
+    }
+  },
+  "75:151": {
+    "inputs": {
+      "text": "no extra hands, no watermarks, no distorted faces, each person has only 2 hands only",
+      "clip": [
+        "75:71",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Prompt)"
+    }
+  },
+  "75:331:319": {
+    "inputs": {
+      "conditioning": [
+        "75:342:339",
+        0
+      ],
+      "latent": [
+        "75:331:320",
+        0
+      ]
+    },
+    "class_type": "ReferenceLatent",
+    "_meta": {
+      "title": "ReferenceLatent"
+    }
+  },
+  "75:331:320": {
+    "inputs": {
+      "pixels": [
+        "75:332",
+        0
+      ],
+      "vae": [
+        "75:72",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAE Encode"
+    }
+  },
+  "75:331:321": {
+    "inputs": {
+      "conditioning": [
+        "75:342:341",
+        0
+      ],
+      "latent": [
+        "75:331:320",
+        0
+      ]
+    },
+    "class_type": "ReferenceLatent",
+    "_meta": {
+      "title": "ReferenceLatent"
+    }
+  },
+  "75:332": {
+    "inputs": {
+      "preprocessor": "DWPreprocessor",
+      "resolution": 512,
+      "image": [
+        "76",
+        0
+      ]
+    },
+    "class_type": "AIO_Preprocessor",
+    "_meta": {
+      "title": "AIO Aux Preprocessor"
+    }
+  },
+  "75:334": {
+    "inputs": {
+      "images": [
+        "75:332",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  },
+  "75:342:339": {
+    "inputs": {
+      "conditioning": [
+        "75:151",
+        0
+      ],
+      "latent": [
+        "75:342:340",
+        0
+      ]
+    },
+    "class_type": "ReferenceLatent",
+    "_meta": {
+      "title": "ReferenceLatent"
+    }
+  },
+  "75:342:340": {
+    "inputs": {
+      "pixels": [
+        "351",
+        0
+      ],
+      "vae": [
+        "75:72",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAE Encode"
+    }
+  },
+  "75:342:341": {
+    "inputs": {
+      "conditioning": [
+        "75:74",
+        0
+      ],
+      "latent": [
+        "75:342:340",
+        0
+      ]
+    },
+    "class_type": "ReferenceLatent",
+    "_meta": {
+      "title": "ReferenceLatent"
+    }
+  },
+  "75:345": {
+    "inputs": {
+      "strength": 1.05,
+      "reference_index": 0,
+      "spatial_fade": "none",
+      "spatial_fade_strength": 0.5,
+      "debug": false,
+      "model": [
+        "75:70",
+        0
+      ],
+      "conditioning": [
+        "75:365:364",
+        0
+      ]
+    },
+    "class_type": "Flux2KleinRefLatentController",
+    "_meta": {
+      "title": "FLUX.2 Klein Ref Latent Controller"
+    }
+  },
+  "75:355": {
+    "inputs": {
+      "ckpt_name": "sam3.1_multiplex_fp16.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Load Checkpoint (Sam3.1)"
+    }
+  },
+  "75:356": {
+    "inputs": {
+      "upscale_method": "nearest-exact",
+      "megapixels": 1,
+      "resolution_steps": 1,
+      "image": [
+        "360",
+        0
+      ]
+    },
+    "class_type": "ImageScaleToTotalPixels",
+    "_meta": {
+      "title": "Change the size"
+    }
+  },
+  "75:357:263": {
+    "inputs": {
+      "threshold": 0.5,
+      "refine_iterations": 2,
+      "individual_masks": false,
+      "model": [
+        "75:355",
+        0
+      ],
+      "image": [
+        "75:356",
+        0
+      ],
+      "conditioning": [
+        "75:357:264",
+        0
+      ]
+    },
+    "class_type": "SAM3_Detect",
+    "_meta": {
+      "title": "SAM3 Detect"
+    }
+  },
+  "75:357:264": {
+    "inputs": {
+      "text": "shirts, shorts, soccer tees, soccer shorts, logo, slogan, symbol, flag",
+      "clip": [
+        "75:355",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Prompt)"
+    }
+  },
+  "75:358": {
+    "inputs": {
+      "color": "0, 255, 0",
+      "device": "gpu",
+      "image": [
+        "75:356",
+        0
+      ],
+      "mask": [
+        "75:361",
+        0
+      ]
+    },
+    "class_type": "DrawMaskOnImage",
+    "_meta": {
+      "title": "Draw Mask On Image"
+    }
+  },
+  "75:359": {
+    "inputs": {
+      "images": [
+        "75:358",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "Preview Image"
+    }
+  },
+  "75:361": {
+    "inputs": {
+      "mask": [
+        "75:357:263",
+        0
+      ]
+    },
+    "class_type": "InvertMask",
+    "_meta": {
+      "title": "InvertMask"
+    }
+  },
+  "75:365:362": {
+    "inputs": {
+      "conditioning": [
+        "75:331:319",
+        0
+      ],
+      "latent": [
+        "75:365:363",
+        0
+      ]
+    },
+    "class_type": "ReferenceLatent",
+    "_meta": {
+      "title": "ReferenceLatent"
+    }
+  },
+  "75:365:363": {
+    "inputs": {
+      "pixels": [
+        "75:358",
+        0
+      ],
+      "vae": [
+        "75:72",
+        0
+      ]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "VAE Encode"
+    }
+  },
+  "75:365:364": {
+    "inputs": {
+      "conditioning": [
+        "75:331:321",
+        0
+      ],
+      "latent": [
+        "75:365:363",
+        0
+      ]
+    },
+    "class_type": "ReferenceLatent",
+    "_meta": {
+      "title": "ReferenceLatent"
+    }
+  }
+}
