@@ -27,7 +27,7 @@ app.add_middleware(
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FLUX_WORKFLOW_PATH = os.path.join(ROOT_DIR, "ComfyUI_Workflows", "flux-studio-app-World-Cup.json")
 SHARP_WORKFLOW_PATH = os.path.join(ROOT_DIR, "ComfyUI_Workflows", "sharp_basic.json")
-KITS_REF_DIR = os.path.join(ROOT_DIR, "Kits References")
+GARMENTS_DIR = os.path.join(ROOT_DIR, "public", "garments")
 
 COMFYUI_URL = os.environ.get("COMFYUI_URL", "http://127.0.0.1:8188")
 
@@ -253,24 +253,24 @@ def ply_to_splat(input_bytes: bytes) -> bytes:
         return input_bytes
 
 def get_kit_reference_filename(team_name: str) -> str:
-    """Finds the kit reference image path from the Kits References folder."""
-    if not os.path.exists(KITS_REF_DIR):
-        raise FileNotFoundError(f"Kits References directory not found at: {KITS_REF_DIR}")
+    """Finds the garment preview image path from the public/garments folder."""
+    if not os.path.exists(GARMENTS_DIR):
+        raise FileNotFoundError(f"Garments directory not found at: {GARMENTS_DIR}")
     
     # Clean up name to compare
     clean_team = team_name.lower().replace(" ", "").replace("-", "")
     
-    for filename in os.listdir(KITS_REF_DIR):
+    for filename in os.listdir(GARMENTS_DIR):
         base, _ = os.path.splitext(filename)
         clean_base = base.lower().replace(" ", "").replace("-", "")
         if clean_base == clean_team or clean_base.startswith(clean_team) or clean_team.startswith(clean_base):
             return filename
             
     # Default fallback to first file in directory or raise error
-    files = [f for f in os.listdir(KITS_REF_DIR) if os.path.isfile(os.path.join(KITS_REF_DIR, f))]
+    files = [f for f in os.listdir(GARMENTS_DIR) if os.path.isfile(os.path.join(GARMENTS_DIR, f))]
     if files:
         return files[0]
-    raise FileNotFoundError(f"No kit reference image found in: {KITS_REF_DIR}")
+    raise FileNotFoundError(f"No garment preview image found in: {GARMENTS_DIR}")
 
 @app.get("/api/health")
 def health():
@@ -291,7 +291,7 @@ async def generate_2d(req: Generate2DRequest):
     # 1. Validate kit reference image
     try:
         kit_filename = get_kit_reference_filename(req.team)
-        kit_path = os.path.join(KITS_REF_DIR, kit_filename)
+        kit_path = os.path.join(GARMENTS_DIR, kit_filename)
         with open(kit_path, "rb") as f:
             kit_bytes = f.read()
     except Exception as e:

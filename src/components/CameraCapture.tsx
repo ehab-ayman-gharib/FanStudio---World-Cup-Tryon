@@ -111,18 +111,18 @@ export default function CameraCapture({ onCapture, onBack }: CameraCaptureProps)
   };
 
   return (
-    <div className="w-full max-w-md mx-auto bg-zinc-900/80 border border-zinc-800 rounded-3xl p-6 shadow-2xl backdrop-blur-xl flex flex-col gap-6">
+    <div className="w-full max-w-md mx-auto bg-white/80 border border-slate-200 rounded-3xl p-6 shadow-xl backdrop-blur-xl flex flex-col gap-6">
       <div className="text-center">
-        <h2 className="text-2xl font-extrabold tracking-tight text-white">
+        <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">
           Identity Capture
         </h2>
-        <p className="text-zinc-400 text-xs mt-1">
+        <p className="text-slate-500 text-xs mt-1">
           Take a selfie or upload a photo of your face.
         </p>
       </div>
 
       {/* Camera / Preview Viewport */}
-      <div className="relative aspect-square w-full rounded-2xl overflow-hidden bg-zinc-950 border border-zinc-800 flex items-center justify-center">
+      <div className="relative aspect-square w-full rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 flex items-center justify-center">
         {capturedPreview ? (
           <img
             src={capturedPreview}
@@ -154,17 +154,17 @@ export default function CameraCapture({ onCapture, onBack }: CameraCaptureProps)
                 <line x1="38" y1="42" x2="62" y2="42" stroke="white" strokeWidth="0.5" strokeDasharray="1 1" />
               </svg>
             </div>
-            <div className="absolute bottom-3 left-1/2 transform -translate-x-1/2 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 pointer-events-none">
-              <span className="text-[10px] text-zinc-300 font-semibold tracking-wide uppercase">
+            <div className="absolute bottom-3 left-1/2 transform -translate-x-1/2 bg-white/80 backdrop-blur-md px-3 py-1 rounded-full border border-slate-200/80 pointer-events-none shadow-sm">
+              <span className="text-[10px] text-slate-700 font-semibold tracking-wide uppercase">
                 Align Face in Center
               </span>
             </div>
           </>
         ) : (
-          <label className="flex flex-col items-center justify-center w-full h-full cursor-pointer hover:bg-zinc-900/30 transition-all p-6 text-center">
-            <Upload className="w-10 h-10 text-zinc-500 mb-3 group-hover:text-emerald-500 transition-colors" />
-            <span className="text-zinc-300 font-semibold text-sm">Upload custom photo</span>
-            <span className="text-zinc-500 text-xs mt-1">PNG, JPG, or WEBP up to 5MB</span>
+          <label className="flex flex-col items-center justify-center w-full h-full cursor-pointer hover:bg-slate-200/50 transition-all p-6 text-center">
+            <Upload className="w-10 h-10 text-slate-400 mb-3 group-hover:text-emerald-500 transition-colors" />
+            <span className="text-slate-700 font-semibold text-sm">Upload custom photo</span>
+            <span className="text-slate-400 text-xs mt-1">PNG, JPG, or WEBP up to 5MB</span>
             <input
               type="file"
               accept="image/*"
@@ -190,14 +190,14 @@ export default function CameraCapture({ onCapture, onBack }: CameraCaptureProps)
           <div className="flex gap-3">
             <button
               onClick={handleRetake}
-              className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2 border border-zinc-700 transition-all text-sm"
+              className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-3 rounded-2xl flex items-center justify-center gap-2 border border-slate-200 transition-all text-sm"
             >
               <RotateCw className="w-4 h-4" />
               Retake
             </button>
             <button
               onClick={handleConfirm}
-              className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-500 hover:brightness-110 text-zinc-950 font-extrabold py-3 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all text-sm"
+              className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-500 hover:brightness-110 text-white font-extrabold py-3 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all text-sm"
             >
               <Check className="w-4 h-4" />
               Confirm
@@ -208,7 +208,7 @@ export default function CameraCapture({ onCapture, onBack }: CameraCaptureProps)
             {useWebcam ? (
               <button
                 onClick={capturePhoto}
-                className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:brightness-110 text-zinc-950 font-extrabold py-3.5 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all text-sm"
+                className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:brightness-110 text-white font-extrabold py-3.5 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition-all text-sm"
               >
                 <Camera className="w-5 h-5" />
                 Capture Photo
@@ -216,7 +216,7 @@ export default function CameraCapture({ onCapture, onBack }: CameraCaptureProps)
             ) : (
               <button
                 onClick={() => setUseWebcam(true)}
-                className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2 border border-zinc-700 transition-all text-sm"
+                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-3 rounded-2xl flex items-center justify-center gap-2 border border-slate-200 transition-all text-sm"
               >
                 <Camera className="w-4 h-4" />
                 Use Web Camera
@@ -226,7 +226,7 @@ export default function CameraCapture({ onCapture, onBack }: CameraCaptureProps)
             {useWebcam && (
               <button
                 onClick={() => setUseWebcam(false)}
-                className="w-full bg-zinc-800/40 hover:bg-zinc-800 text-zinc-300 font-semibold py-2.5 rounded-2xl flex items-center justify-center gap-2 border border-zinc-800/80 transition-all text-xs"
+                className="w-full bg-slate-100 hover:bg-slate-200/80 text-slate-600 font-semibold py-2.5 rounded-2xl flex items-center justify-center gap-2 border border-slate-200 transition-all text-xs"
               >
                 <Upload className="w-4 h-4" />
                 Upload Photo Instead
@@ -237,7 +237,7 @@ export default function CameraCapture({ onCapture, onBack }: CameraCaptureProps)
 
         <button
           onClick={onBack}
-          className="w-full text-zinc-500 hover:text-zinc-300 font-medium py-2 text-xs mt-1 transition-colors"
+          className="w-full text-slate-400 hover:text-slate-600 font-medium py-2 text-xs mt-1 transition-colors"
         >
           ← Go Back to Team Selection
         </button>

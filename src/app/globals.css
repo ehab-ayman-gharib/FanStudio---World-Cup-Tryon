@@ -1,10 +1,10 @@
 @import "tailwindcss";
 
 :root {
-  --background: #09090b; /* Zinc 950 */
-  --foreground: #fafafa; /* Zinc 50 */
-  --card-bg: rgba(18, 18, 24, 0.65);
-  --card-border: rgba(39, 39, 42, 0.5);
+  --background: #f8fafc; /* Slate 50 */
+  --foreground: #0f172a; /* Slate 900 */
+  --card-bg: rgba(255, 255, 255, 0.75);
+  --card-border: rgba(226, 232, 240, 0.8);
   --accent-emerald: #10b981;
   --accent-indigo: #6366f1;
 }
@@ -29,18 +29,18 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(24, 24, 27, 0.5);
+  background: rgba(241, 245, 249, 0.5);
   border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(63, 63, 70, 0.5);
+  background: rgba(203, 213, 225, 0.8);
   border-radius: 999px;
-  border: 1px solid rgba(24, 24, 27, 0.2);
+  border: 1px solid rgba(226, 232, 240, 0.3);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(82, 82, 91, 0.7);
+  background: rgba(148, 163, 184, 0.8);
 }
 
 /* Glassmorphism Panels */
@@ -95,6 +95,6 @@ body {
 }
 
 .selection-card:hover {
-  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.08);
 }
 
