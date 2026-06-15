@@ -53,6 +53,18 @@ export default function LookViewer2D({
     return () => clearInterval(interval);
   }, [loading]);
  
+  // Helper to convert image URL to base64 on frontend
+  const imageUrlToBase64 = async (url: string): Promise<string> => {
+    const resp = await fetch(url);
+    const blob = await resp.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
   // Call generation API on mount
   useEffect(() => {
     if (hasTriggered.current) return;
@@ -63,14 +75,23 @@ export default function LookViewer2D({
         setLoading(true);
         setError(null);
  
+        // Convert kit reference image to base64 on client
+        let kitB64 = "";
+        try {
+          const kitUrl = `/garments/${selectedTeam.filename}`;
+          kitB64 = await imageUrlToBase64(kitUrl);
+        } catch (e: any) {
+          throw new Error(`Failed to load kit reference image: ${e.message}`);
+        }
+
         const response = await fetch(`${API_BASE_URL}/api/generate-2d`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            image: userImage,
-            team: selectedTeam.name,
+            user_image: userImage,
+            kit_image: kitB64,
             num_variations: 1,
           }),
         });

@@ -12,8 +12,7 @@ const getApiBaseUrl = () => {
       return `http://${hostname}:5000`;
     }
   }
-  // Default to relative paths (Next.js route handlers) on Vercel/production,
-  // which securely proxy the requests to your Modal backend over HTTPS.
-  return "";
+  // Direct Modal URL fallback to prevent Vercel serverless 10s/60s timeout limit
+  return "https://ehab-ayman-gh--fanstudio-worldcup-2026-serve.modal.run";
 };
 export const API_BASE_URL = getApiBaseUrl();
