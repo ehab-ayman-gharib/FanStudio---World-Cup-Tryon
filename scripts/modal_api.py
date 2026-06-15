@@ -22,7 +22,7 @@ nfs = modal.NetworkFileSystem.from_name("fanstudio-shared-nfs", create_if_missin
 image = (
     modal.Image.from_registry("nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04", add_python="3.10")
     .entrypoint([])
-    .apt_install("git", "libgl1", "libglib2.0-0", "wget", "libgomp1")
+    .apt_install("git", "libgl1", "libglib2.0-0", "wget", "libgomp1", "ffmpeg")
     .pip_install(
         "fastapi[standard]", 
         "python-multipart",
@@ -91,10 +91,10 @@ class Generate3DRequest(BaseModel):
 
 # --- 3. STAGE 1: FLUX GENERATION WORKER ---
 @app.cls(
-    gpu="L4",
+    gpu="A100",
     image=image,
     volumes={"/root/ComfyUI/models": vol},
-    scaledown_window=300,
+    scaledown_window=60,
     timeout=600
 )
 class ComfyFLUXWorker:
@@ -139,7 +139,7 @@ class ComfyFLUXWorker:
         except Exception:
             pass
 
-        print("🌀 Launching FLUX ComfyUI instance on L4...")
+        print("🌀 Launching FLUX ComfyUI instance on A100...")
         subprocess.Popen([
             "python", "main.py", 
             "--listen", "127.0.0.1", 
@@ -154,7 +154,7 @@ class ComfyFLUXWorker:
                     return
             except requests.exceptions.ConnectionError:
                 time.sleep(1)
-        raise Exception("ComfyUI server failed to initialize on L4.")
+        raise Exception("ComfyUI server failed to initialize on A100.")
 
     @modal.method()
     def process(self, user_img_bytes: bytes, kit_img_bytes: bytes, seed: int, prompt_override: str | None, workflow_json_str: str) -> bytes:
@@ -211,11 +211,11 @@ class ComfyFLUXWorker:
 
 # --- 4. STAGE 2: APPLE SHARP 3DGS WORKER ---
 @app.cls(
-    gpu="T4",
+    gpu="L4",
     image=image,
     volumes={"/root/ComfyUI/models": vol},
     network_file_systems={"/shared": nfs},
-    scaledown_window=300,
+    scaledown_window=60,
     timeout=600
 )
 class ComfySHARPWorker:
@@ -260,7 +260,7 @@ class ComfySHARPWorker:
         except Exception:
             pass
 
-        print("🌀 Launching SHARP ComfyUI instance on T4...")
+        print("🌀 Launching SHARP ComfyUI instance on L4...")
         subprocess.Popen([
             "python", "main.py", 
             "--listen", "127.0.0.1", 
@@ -275,7 +275,7 @@ class ComfySHARPWorker:
                     return
             except requests.exceptions.ConnectionError:
                 time.sleep(1)
-        raise Exception("ComfyUI server failed to initialize on T4.")
+        raise Exception("ComfyUI server failed to initialize on L4.")
 
     @modal.method()
     def process(self, img_bytes: bytes, workflow_json_str: str) -> str:
