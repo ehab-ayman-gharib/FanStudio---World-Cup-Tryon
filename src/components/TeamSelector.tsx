@@ -99,11 +99,35 @@ const GarmentPreview = ({ filename }: { filename: string }) => {
     });
   };
 
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
+      const x = ((touch.clientX - left) / width) * 100;
+      const y = ((touch.clientY - top) / height) * 100;
+
+      setZoomStyle({
+        transformOrigin: `${x}% ${y}%`,
+        transform: "scale(1.35)", // Slightly higher zoom on mobile touch
+      });
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setZoomStyle({
+      transformOrigin: "center center",
+      transform: "scale(1)",
+    });
+  };
+
   return (
     <div
       className="relative w-full aspect-[3/4] rounded-2xl overflow-hidden bg-gradient-to-b from-[#121417] to-[#1b1e22] border border-[#282d34] flex items-center justify-center cursor-zoom-in group"
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
+      onTouchStart={handleTouchMove}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
     >
       {loading && (
         <div className="absolute inset-0 bg-[#121417]/80 backdrop-blur-sm flex items-center justify-center z-10 pointer-events-none">
