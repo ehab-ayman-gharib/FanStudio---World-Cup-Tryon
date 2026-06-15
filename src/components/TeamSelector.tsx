@@ -58,30 +58,22 @@ const LogoImage = ({ teamId, className }: { teamId: string; className?: string }
 };
 
 // GarmentPreview component that loads premium generated mockups from /garments/ with hover zoom-and-pan
-const GarmentPreview = ({ teamId }: { teamId: string }) => {
-  const [src, setSrc] = useState(`/garments/${teamId}.webp`);
-  const [fallbackIndex, setFallbackIndex] = useState(0);
+const GarmentPreview = ({ filename }: { filename: string }) => {
+  const [src, setSrc] = useState(`/garments/${filename}`);
   const [loading, setLoading] = useState(true);
   const [zoomStyle, setZoomStyle] = useState<React.CSSProperties>({
     transformOrigin: "center center",
     transform: "scale(1)",
   });
-  
-  const fallbacks = [
-    `/garments/${teamId}.png`,
-    `/garments/${teamId}.jpg`,
-  ];
 
   useEffect(() => {
     setLoading(true);
-    setSrc(`/garments/${teamId}.webp`);
-    setFallbackIndex(0);
+    setSrc(`/garments/${filename}`);
     setZoomStyle({
       transformOrigin: "center center",
       transform: "scale(1)",
     });
-  }, [teamId]);
-
+  }, [filename]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
@@ -92,7 +84,6 @@ const GarmentPreview = ({ teamId }: { teamId: string }) => {
       transformOrigin: `${x}% ${y}%`,
       transform: "scale(1.25)", // 1.25x zoom
     });
-
   };
 
   const handleMouseLeave = () => {
@@ -100,15 +91,6 @@ const GarmentPreview = ({ teamId }: { teamId: string }) => {
       transformOrigin: "center center",
       transform: "scale(1)",
     });
-  };
-
-  const handleError = () => {
-    if (fallbackIndex < fallbacks.length) {
-      setSrc(fallbacks[fallbackIndex]);
-      setFallbackIndex(prev => prev + 1);
-    } else {
-      setLoading(false);
-    }
   };
 
   return (
@@ -130,7 +112,7 @@ const GarmentPreview = ({ teamId }: { teamId: string }) => {
 
       <img
         src={src}
-        alt={`${teamId} garment preview`}
+        alt={`${filename} garment preview`}
         className="w-full h-full object-cover transition-transform"
         style={{
           ...zoomStyle,
@@ -139,7 +121,6 @@ const GarmentPreview = ({ teamId }: { teamId: string }) => {
             : "transform 0.08s ease-out"
         }}
         onLoad={() => setLoading(false)}
-        onError={handleError}
       />
 
       <div className="absolute bottom-3 right-3 bg-white/80 backdrop-blur-md px-2.5 py-1 rounded-full border border-slate-200 text-[10px] text-slate-500 font-bold uppercase tracking-wider pointer-events-none shadow-sm">
@@ -302,7 +283,7 @@ export default function TeamSelector({ onSelectTeam, selectedTeam }: TeamSelecto
             {/* Garment Preview Display */}
             <div className="flex flex-col gap-4">
               <GarmentPreview
-                teamId={activeTeam.id}
+                filename={activeTeam.filename}
               />
             </div>
 

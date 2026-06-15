@@ -1,7 +1,14 @@
 const getApiBaseUrl = () => {
-  if (typeof window !== "undefined") {
-    return process.env.NEXT_PUBLIC_API_URL || `http://${window.location.hostname}:5000`;
+  const envVal = process.env.NEXT_PUBLIC_API_URL;
+  if (envVal === "relative") {
+    return "";
   }
-  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+  if (envVal) {
+    return envVal;
+  }
+  if (typeof window !== "undefined") {
+    return `http://${window.location.hostname}:5000`;
+  }
+  return "http://localhost:5000";
 };
 export const API_BASE_URL = getApiBaseUrl();

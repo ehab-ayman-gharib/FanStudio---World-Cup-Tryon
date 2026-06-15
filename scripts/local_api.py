@@ -31,6 +31,8 @@ GARMENTS_DIR = os.path.join(ROOT_DIR, "public", "garments")
 
 COMFYUI_URL = os.environ.get("COMFYUI_URL", "http://127.0.0.1:8188")
 
+
+
 # Curated country schemes for stunning premium gradients and theme configurations
 TEAM_THEMES = {
     "Argentina": {"colors": ["#74ACDF", "#FFFFFF", "#1E3A8A"], "group": "Group A"},
@@ -277,6 +279,7 @@ def health():
     comfy_alive = test_comfyui_connection()
     return {
         "status": "healthy" if comfy_alive else "degraded",
+        "mode": "local",
         "comfyui_url": COMFYUI_URL,
         "comfyui_connected": comfy_alive
     }
@@ -515,17 +518,18 @@ def download_3d(filename: str):
                     "Cache-Control": "public, max-age=3600"
                 }
             )
-        else:
-            # Fallback: try to fetch from ComfyUI and convert on the fly
-            ply_filename = filename.replace(".splat", ".ply")
-            ply_bytes = download_comfy_file(ply_filename, "output")
-            splat_bytes = ply_to_splat(ply_bytes)
-            return Response(
-                content=splat_bytes,
-                media_type="application/octet-stream",
-                headers={"Content-Disposition": f"inline; filename={filename}"}
-            )
+        # Fallback: try to fetch from ComfyUI and convert on the fly
+        ply_filename = filename.replace(".splat", ".ply")
+        ply_bytes = download_comfy_file(ply_filename, "output")
+        splat_bytes = ply_to_splat(ply_bytes)
+        return Response(
+            content=splat_bytes,
+            media_type="application/octet-stream",
+            headers={"Content-Disposition": f"inline; filename={filename}"}
+        )
     except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
         raise HTTPException(status_code=404, detail=f"3D Model file not found: {str(e)}")
 
 if __name__ == "__main__":
