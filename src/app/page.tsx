@@ -49,7 +49,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[#121417] text-[#f8fafc] flex flex-col relative overflow-hidden font-sans dot-grid">
-      
+
       {/* Vibrant premium background glow orbs */}
       <div className="absolute top-[-10%] right-[-5%] w-[600px] h-[600px] bg-[#00F0FF]/5 rounded-full blur-[130px] -z-10 animate-pulse-glow pointer-events-none" />
       <div className="absolute bottom-[-10%] left-[-5%] w-[600px] h-[600px] bg-[#ADFF00]/5 rounded-full blur-[130px] -z-10 animate-pulse-glow pointer-events-none" style={{ animationDelay: '-3s' }} />
@@ -64,7 +64,7 @@ export default function Home() {
                 FANSTUDIO
               </span>
               <span className="text-[9px] text-[#ADFF00] font-label font-bold tracking-widest uppercase">
-                WC26
+                WC-26
               </span>
             </div>
           </div>
