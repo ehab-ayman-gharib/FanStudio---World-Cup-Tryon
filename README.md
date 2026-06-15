@@ -1,49 +1,73 @@
 # FanStudio - World Cup 2026
 
-An Interactive Generative 3D Fan Experience for the FIFA World Cup 2026. Fans can select their favorite team, capture a selfie, generate a cinematic 2D kit look avatar (FLUX + SAM 3), and convert their favorite look into an interactive 3D Gaussian Splat (SHARP).
+An Interactive Generative 3D Fan Experience for the FIFA World Cup 2026. Fans can select their favorite team, capture a selfie, generate a cinematic 2D kit look avatar (FLUX + SAM 3.1), and reconstruct their favorite look into an interactive 3D Gaussian Splat (SHARP) to view in real-time.
 
-The web application features a premium deep-indigo glassmorphic interface, official team logos, and high-fidelity 3D garment previews generated locally.
-
+The web application features a premium slate/glassmorphic light interface, official team logos, custom webkit scrollbars, and high-fidelity 3D garment previews generated locally.
 
 ---
 
-## 🚀 Key Features
+## 🚀 Interactive Screens & Flow
 
-1. **Premium Redesigned UI**: A sleek dark hybrid layout with glowing ambient neon gradients, subtle dot-grid backdrops, custom webkit scrollbars, and fluid transitions.
-2. **Double-Pane Team Selector**: An interactive split view featuring:
-   - **Left side**: A searchable, scrollable grid of participating national teams, each displaying their official crest logo and group stage details.
-   - **Right side**: A detailed team card highlighting kit colors and a **Premium Garment Preview** loaded dynamically.
-3. **ComfyUI-Powered Previews**: Automated script to generate high-fidelity, studio-quality 3D jersey mockups for every team, removing the need for low-res reference photos.
-4. **Selfie Capture & Flat Gen**: Seamless capture via user webcam, passing image data to a custom ComfyUI FLUX pipeline to output personalized fan avatars wearing the team's official jersey.
-5. **3D Splat Studio**: Volumetric reconstruction converting 2D avatars into interactive 3D Gaussian Splats (.splat format) loaded directly in the browser using Three.js / `@react-three/drei`.
+The FanStudio user interface is divided into a 4-step wizard that guides users through the generative pipeline:
+
+### 1. Select Your Team (`TeamSelector`)
+* **Searchable Team Grid**: A scrollable, searchable list of participating national teams, showing team crests and group stage assignments.
+* **Smart Logo Fallbacks**: Crest logos load dynamically, checking multiple formats (`.jpg`, `.png`, `.webp`, `.svg`, `.jpeg` and capitalized variants) to prevent broken image cards.
+* **Premium Garment Preview**: The right side features a premium studio look mockup loaded from `public/garments/`. Hovering over the card activates a **smooth zoom-and-pan magnifying effect** for close-up jersey inspections.
+* **Kit Color Palettes**: Displays the official palette colors defined for each nation.
+
+### 2. Identity Capture (`CameraCapture`)
+* **Webcam Integration**: Captures selfies directly via the user's web camera (requires HTTPS/localhost).
+* **Silhouette Alignment Guide**: Displays a responsive face-contour overlay (silhouette ellipse, neck boundaries, and horizontal eye alignment guidelines) to ensure the user’s portrait aligns perfectly for optimal generative segmentation.
+* **Local File Upload**: Allows fallback uploads for PNG, JPG, or WEBP files up to 5MB.
+* **Review & Retake**: Instant validation showing preview, with quick-action toggles to retake or confirm.
+
+### 3. 2D Look Generation & Gallery (`LookViewer2D`)
+* **ComfyUI FLUX + SAM 3.1 Pipeline**: Transmits the confirmed selfie to ComfyUI. The server uses Segment Anything 3 (SAM) to isolate the user’s clothing and overlays the official national jersey via FLUX image-to-image conditioning.
+* **Stadium Loader Messages**: Cycles through immersive status messages (e.g. *"Tailoring your official jersey..."*, *"Ironing your national team crest..."*, *"Lacing up your soccer boots..."*) during backend processing.
+* **Look Customizer**: Displays the generated flat 2D avatar inside a custom preview card.
+* **Fullscreen Zoom Modal**: An interactive light-box modal expands the portrait to fullscreen on click.
+* **Direct PNG Download**: Exports the flat 2D portrait.
+
+### 4. 3D Splat Studio (`Viewport3D`)
+* **Apple SHARP Reconstruction**: Converts the selected 2D avatar portrait into an interactive 3D Gaussian Splat.
+* **Fast PLY-to-Splat Conversion**: The backend parses the large 3DGS PLY data and converts it into a highly compressed, sorted `.splat` binary format using numpy structured arrays.
+* **Three.js / React Three Fiber Renderer**: Renders the volumetric splat directly in the browser via Canvas and `@react-three/drei`'s `Splat` loader.
+* **Interactive Control Deck**: Swipe to orbit, drag to rotate, or toggle between 2D and 3D preview modes.
+* **Smartphone Gyroscope Parallax**: Mobile visitors can enable gyroscope permissions. Tilting or rotating the phone shifts the camera viewport dynamically, producing a stunning volumetric depth-of-field parallax effect.
+* **Splat Downloader**: Download the compiled `.splat` model for standalone spatial players.
 
 ---
 
 ## 🛠️ Utility & Automation Scripts
 
-We have created several Python helper scripts under `scripts/` to automate the setup of the dataset assets and pipeline inputs:
+We have created several helper scripts under `scripts/` to automate setup and asset preparation:
 
 ### 1. Logo Scraper (`fetch_logos.py`)
-Fetches high-quality official team logos/crests for all 48 participating countries from the web:
+Scrapes high-quality official team logos/crests for the participating countries:
 ```bash
 python scripts/fetch_logos.py
 ```
-*Features multi-page pagination scanning and a keyword-based scoring algorithm to avoid site placeholders.*
 
 ### 2. Alpha Cleaner (`convert_logos_to_jpg.py`)
-Converts transparent team crests into RGB JPGs on a solid white background:
+Converts transparent team crests into RGB JPGs on solid white backdrops:
 ```bash
 python scripts/convert_logos_to_jpg.py
 ```
 *Solves alpha-channel errors and noise artifacts during Flux image conditioning.*
 
 ### 3. Premium Studio Preview Generator (`generate_previews.py`)
-Automates the local ComfyUI workflow to generate the premium mockups for all 48 teams:
+Automates the local ComfyUI workflow to generate the initial high-fidelity garment mockups for all teams:
 ```bash
 python scripts/generate_previews.py
 ```
-*Reads parameters from [Garment-WorldCup-Logo.json](file:///d:/Work/World-Cup-Kits-Tryon/FanStudio---World-Cup-Tryon/ComfyUI_Workflows/Garment-WorldCup-Logo.json), uploads assets, queues prompt tasks, and downloads output files directly to `public/garments/`. Features automatic resume support.*
+*Uses parameters from [Garment-WorldCup-Logo.json](file:///d:/Work/World-Cup-Kits-Tryon/FanStudio---World-Cup-Tryon/ComfyUI_Workflows/Garment-WorldCup-Logo.json) to upload assets, queue ComfyUI prompts, and download generated WEBP output files directly to `public/garments/`.*
 
+### 4. Splat Analyzer (`analyze_splat.py`)
+Inspects binary header layout details and calculates centroid dimensions of generated `.splat` point clouds:
+```bash
+python scripts/analyze_splat.py
+```
 
 ---
 
@@ -57,9 +81,9 @@ To run the application locally on your machine with a local GPU:
 
 ### Step B: Run the local Python FastAPI server
 1. Open a new terminal in the project directory.
-2. Install dependencies:
+2. Install Python dependencies (including `numpy` for PLY-to-Splat parsing):
    ```bash
-   pip install fastapi uvicorn requests pillow pydantic bs4
+   pip install fastapi uvicorn requests pillow pydantic numpy bs4
    ```
 3. Run the local API server:
    ```bash
@@ -96,7 +120,7 @@ To deploy the backend to Modal (serverless GPU scaling):
    ```
 
 ### Step B: Upload Required Model Files
-Since FLUX and SAM checkpoints are very large, upload only the specific 5 models required for this project's workflows:
+Upload the 5 specific model files required for the generation workflows:
 
 ```bash
 # 1. Upload the FLUX.2 Klein UNet model

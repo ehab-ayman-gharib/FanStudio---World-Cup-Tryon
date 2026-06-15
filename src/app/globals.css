@@ -1,46 +1,67 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f8fafc; /* Slate 50 */
-  --foreground: #0f172a; /* Slate 900 */
-  --card-bg: rgba(255, 255, 255, 0.75);
-  --card-border: rgba(226, 232, 240, 0.8);
-  --accent-emerald: #10b981;
-  --accent-indigo: #6366f1;
+  --background: #121417; /* Urban Pitch Neutral Background */
+  --foreground: #f8fafc; /* White/Slate text */
+  --card-bg: rgba(27, 30, 34, 0.85); /* Dark card background */
+  --card-border: rgba(40, 45, 52, 0.85); /* Dark gray/charcoal border */
+  --accent-primary: #00F0FF; /* Electric Cyan */
+  --accent-secondary: #ADFF00; /* Neon Lime Green */
+  --accent-tertiary: #FF007A; /* Neon Pink */
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --font-sans: var(--font-hanken-grotesk), sans-serif;
+  --font-mono: var(--font-jetbrains-mono), monospace;
+  --font-headline: var(--font-anton), sans-serif;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-family: var(--font-hanken-grotesk), system-ui, -apple-system, sans-serif;
   overflow-x: hidden;
   letter-spacing: -0.01em;
 }
 
-/* Custom Scrollbars */
+/* Typography Utility Classes */
+.font-headline {
+  font-family: var(--font-anton), sans-serif;
+}
+.font-body {
+  font-family: var(--font-hanken-grotesk), sans-serif;
+}
+.font-label {
+  font-family: var(--font-jetbrains-mono), monospace;
+}
+
+/* Custom Scrollbars matching Urban Pitch Cyan */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(241, 245, 249, 0.5);
+  background: rgba(18, 20, 23, 0.5);
   border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(203, 213, 225, 0.8);
+  background: rgba(0, 240, 255, 0.2);
   border-radius: 999px;
-  border: 1px solid rgba(226, 232, 240, 0.3);
+  border: 1px solid rgba(0, 240, 255, 0.05);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.8);
+  background: rgba(0, 240, 255, 0.4);
+}
+
+/* Dot Grid Background Overlay */
+.dot-grid {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1.2px, transparent 1.2px);
+  background-size: 24px 24px;
 }
 
 /* Glassmorphism Panels */
@@ -65,7 +86,7 @@ body {
     transform: scale(1);
   }
   50% {
-    opacity: 0.25;
+    opacity: 0.3;
     transform: scale(1.05);
   }
 }
@@ -95,6 +116,19 @@ body {
 }
 
 .selection-card:hover {
-  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 12px 30px -10px rgba(0, 240, 255, 0.15);
+  border-color: rgba(0, 240, 255, 0.4);
 }
 
+@keyframes text-glow {
+  0%, 100% {
+    text-shadow: 0 0 4px rgba(0, 240, 255, 0.15), 0 0 10px rgba(0, 240, 255, 0.05);
+  }
+  50% {
+    text-shadow: 0 0 15px rgba(0, 240, 255, 0.7), 0 0 30px rgba(0, 240, 255, 0.4);
+  }
+}
+
+.animate-text-glow {
+  animation: text-glow 3s ease-in-out infinite;
+}

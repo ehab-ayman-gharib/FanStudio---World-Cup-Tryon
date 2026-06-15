@@ -83,7 +83,6 @@ export default function Viewport3D({ selected2DImage, onBack }: Viewport3DProps)
   // Request gyroscope permissions on iOS / listen to orientation
   useEffect(() => {
     const handleOrientation = (e: DeviceOrientationEvent) => {
-      // Normalize values to small radian rotation offsets
       const beta = e.beta || 0;  // -180 to 180 (front/back tilt)
       const gamma = e.gamma || 0; // -90 to 90 (left/right tilt)
 
@@ -104,7 +103,6 @@ export default function Viewport3D({ selected2DImage, onBack }: Viewport3DProps)
   }, []);
 
   const requestGyroAccess = async () => {
-    // Check if DeviceOrientationEvent.requestPermission is supported (iOS 13+)
     const deviceAuth = (DeviceOrientationEvent as any).requestPermission;
     if (typeof deviceAuth === "function") {
       try {
@@ -119,7 +117,6 @@ export default function Viewport3D({ selected2DImage, onBack }: Viewport3DProps)
         setGyroPermission("denied");
       }
     } else {
-      // Android / Desktop default
       setGyroPermission("granted");
     }
   };
@@ -153,13 +150,13 @@ export default function Viewport3D({ selected2DImage, onBack }: Viewport3DProps)
 
   if (loading) {
     return (
-      <div className="w-full max-w-md mx-auto bg-white/80 border border-slate-200 rounded-3xl p-8 shadow-xl backdrop-blur-xl flex flex-col items-center justify-center gap-6 min-h-[400px]">
-        <Loader2 className="w-12 h-12 text-emerald-500 animate-spin" />
+      <div className="w-full max-w-md mx-auto bg-[#1b1e22]/90 border border-[#282d34] rounded-3xl p-8 shadow-2xl backdrop-blur-xl flex flex-col items-center justify-center gap-6 min-h-[400px] animate-fade-in-up">
+        <Loader2 className="w-12 h-12 text-[#00F0FF] animate-spin" />
         <div className="text-center flex flex-col gap-1.5">
-          <h3 className="text-slate-900 font-bold text-lg tracking-wide uppercase">
-            3D Studio
+          <h3 className="text-white font-headline text-2xl tracking-wider uppercase">
+            3D STUDIO
           </h3>
-          <p className="text-slate-500 text-sm animate-pulse">
+          <p className="text-slate-400 text-xs font-body animate-pulse">
             Generating 3D volumetric space...
           </p>
         </div>
@@ -169,31 +166,31 @@ export default function Viewport3D({ selected2DImage, onBack }: Viewport3DProps)
 
   if (error) {
     return (
-      <div className="w-full max-w-md mx-auto bg-white/80 border border-slate-200 rounded-3xl p-6 shadow-xl backdrop-blur-xl flex flex-col items-center justify-center gap-6 text-center">
+      <div className="w-full max-w-md mx-auto bg-[#1b1e22]/90 border border-[#282d34] rounded-3xl p-6 shadow-2xl backdrop-blur-xl flex flex-col items-center justify-center gap-6 text-center animate-fade-in-up">
         <div className="w-12 h-12 rounded-full bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-500">
           <ArrowLeft className="w-6 h-6" />
         </div>
         <div>
-          <h3 className="text-slate-900 font-bold text-lg">SHARP Failure</h3>
-          <p className="text-slate-500 text-xs mt-2 px-4 leading-relaxed">
+          <h3 className="text-white font-headline text-xl uppercase tracking-wider">SHARP FAILURE</h3>
+          <p className="text-slate-400 text-xs mt-2 px-4 leading-relaxed font-body">
             {error}
           </p>
         </div>
         <button
           onClick={onBack}
-          className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold py-3 rounded-2xl border border-slate-200 transition-all text-sm"
+          className="w-full bg-[#121417] hover:bg-[#121417]/80 text-white font-headline tracking-wide uppercase py-3 rounded-2xl border border-[#282d34] transition-all text-sm cursor-pointer"
         >
-          Go Back
+          GO BACK
         </button>
       </div>
     );
   }
 
   return (
-    <div className="relative w-full max-w-[480px] h-[640px] bg-slate-100 rounded-3xl overflow-hidden border border-slate-200 shadow-xl mx-auto">
+    <div className="relative w-full max-w-[480px] h-[520px] sm:h-[640px] bg-[#121417] rounded-3xl overflow-hidden border border-[#282d34] shadow-2xl mx-auto">
       {/* Display Mode */}
       {show2D ? (
-        <div className="w-full h-full bg-slate-100 flex items-center justify-center p-4">
+        <div className="w-full h-full bg-[#121417] flex items-center justify-center p-4">
           <img
             src={selected2DImage}
             alt="2D generated look"
@@ -205,7 +202,7 @@ export default function Viewport3D({ selected2DImage, onBack }: Viewport3DProps)
         plyUrl && (
           <Canvas
             camera={{ position: [0, 2, -1.4], fov: 45 }}
-            className="w-full h-full bg-slate-100"
+            className="w-full h-full bg-[#121417]"
           >
             <ambientLight intensity={1.5} />
             <directionalLight position={[5, 5, 5]} intensity={1.5} />
@@ -236,25 +233,25 @@ export default function Viewport3D({ selected2DImage, onBack }: Viewport3DProps)
       <div className="absolute top-4 left-4 flex gap-2">
         <button
           onClick={onBack}
-          className="bg-white/80 hover:bg-white/95 backdrop-blur-md border border-slate-200 text-slate-800 px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition-all text-xs font-semibold shadow-sm cursor-pointer"
+          className="bg-[#121417]/85 hover:bg-[#121417] backdrop-blur-md border border-[#282d34] text-white hover:text-[#00F0FF] hover:border-[#00F0FF] px-3 py-2 rounded-xl flex items-center gap-1.5 transition-all text-[10px] font-label font-bold uppercase shadow-sm cursor-pointer"
         >
-          <ArrowLeft className="w-4 h-4" />
-          Gallery
+          <ArrowLeft className="w-3.5 h-3.5" />
+          GALLERY
         </button>
         
         <button
           onClick={() => setShow2D(prev => !prev)}
-          className="bg-white/80 hover:bg-white/95 backdrop-blur-md border border-slate-200 text-slate-800 px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition-all text-xs font-semibold shadow-sm cursor-pointer"
+          className="bg-[#121417]/85 hover:bg-[#121417] backdrop-blur-md border border-[#282d34] text-white hover:text-[#00F0FF] hover:border-[#00F0FF] px-3 py-2 rounded-xl flex items-center gap-1.5 transition-all text-[10px] font-label font-bold uppercase shadow-sm cursor-pointer"
         >
           {show2D ? (
             <>
-              <Box className="w-4 h-4" />
-              3D View
+              <Box className="w-3.5 h-3.5 text-[#00F0FF]" />
+              3D VIEW
             </>
           ) : (
             <>
-              <Eye className="w-4 h-4" />
-              2D View
+              <Eye className="w-3.5 h-3.5 text-[#00F0FF]" />
+              2D VIEW
             </>
           )}
         </button>
@@ -262,10 +259,10 @@ export default function Viewport3D({ selected2DImage, onBack }: Viewport3DProps)
         {!show2D && (
           <button
             onClick={handleResetView}
-            className="bg-white/80 hover:bg-white/95 backdrop-blur-md border border-slate-200 text-slate-800 px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition-all text-xs font-semibold shadow-sm cursor-pointer"
+            className="bg-[#121417]/85 hover:bg-[#121417] backdrop-blur-md border border-[#282d34] text-white hover:text-[#00F0FF] hover:border-[#00F0FF] px-3 py-2 rounded-xl flex items-center gap-1.5 transition-all text-[10px] font-label font-bold uppercase shadow-sm cursor-pointer"
           >
-            <RotateCcw className="w-4 h-4" />
-            Reset View
+            <RotateCcw className="w-3.5 h-3.5" />
+            RESET
           </button>
         )}
       </div>
@@ -274,31 +271,31 @@ export default function Viewport3D({ selected2DImage, onBack }: Viewport3DProps)
         {!show2D ? (
           <button
             onClick={downloadPly}
-            className="bg-white/80 hover:bg-white/95 backdrop-blur-md border border-slate-200 text-slate-800 px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition-all text-xs font-semibold shadow-sm cursor-pointer"
+            className="bg-[#121417]/85 hover:bg-[#121417] backdrop-blur-md border border-[#282d34] text-white hover:text-[#ADFF00] hover:border-[#ADFF00] px-3 py-2 rounded-xl flex items-center gap-1.5 transition-all text-[10px] font-label font-bold uppercase shadow-sm cursor-pointer"
           >
-            <Download className="w-4 h-4" />
-            Download 3D
+            <Download className="w-3.5 h-3.5" />
+            EXPORT 3D
           </button>
         ) : (
           <a
             href={selected2DImage}
             download="fanstudio_avatar_2d.png"
-            className="bg-white/80 hover:bg-white/95 backdrop-blur-md border border-slate-200 text-slate-800 px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition-all text-xs font-semibold shadow-sm cursor-pointer"
+            className="bg-[#121417]/85 hover:bg-[#121417] backdrop-blur-md border border-[#282d34] text-white hover:text-[#ADFF00] hover:border-[#ADFF00] px-3 py-2 rounded-xl flex items-center gap-1.5 transition-all text-[10px] font-label font-bold uppercase shadow-sm cursor-pointer"
           >
-            <Download className="w-4 h-4" />
-            Download 2D
+            <Download className="w-3.5 h-3.5" />
+            EXPORT 2D
           </a>
         )}
       </div>
 
       {!show2D && (
         <>
-          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex flex-col items-center gap-2 pointer-events-none text-center bg-white/70 backdrop-blur-sm px-4 py-2 rounded-2xl border border-slate-200/80 shadow-sm">
-            <span className="text-[10px] text-slate-700 font-bold tracking-widest uppercase">
-              Orbit Orbit / Touch Tilt
+          <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex flex-col items-center gap-1 pointer-events-none text-center bg-[#121417]/85 backdrop-blur-md px-4 py-2 rounded-2xl border border-[#282d34] shadow-md w-[80%]">
+            <span className="text-[9px] text-[#00F0FF] font-label font-bold tracking-wider uppercase">
+              SWIPE TO ROTATE / TILT PHONE
             </span>
-            <span className="text-[9px] text-slate-500">
-              Swipe to rotate. Tilt phone for depth.
+            <span className="text-[8px] text-slate-500 font-body">
+              Enable gyro to experience depth movement.
             </span>
           </div>
 
@@ -306,10 +303,10 @@ export default function Viewport3D({ selected2DImage, onBack }: Viewport3DProps)
           {gyroPermission === "default" && (
             <button
               onClick={requestGyroAccess}
-              className="absolute bottom-16 right-4 pointer-events-auto bg-emerald-500 hover:bg-emerald-600 text-white p-2.5 rounded-full shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center cursor-pointer"
+              className="absolute bottom-16 right-4 pointer-events-auto bg-[#ADFF00] hover:brightness-110 text-[#121417] p-3 rounded-full shadow-lg shadow-[#ADFF00]/15 transition-all flex items-center justify-center cursor-pointer"
               title="Enable Gyroscope Parallax"
             >
-              <Smartphone className="w-4 h-4" />
+              <Smartphone className="w-4.5 h-4.5" />
             </button>
           )}
         </>
