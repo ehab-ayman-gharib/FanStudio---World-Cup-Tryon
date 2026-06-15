@@ -102,8 +102,43 @@ export default function LookViewer2D({
         }
  
         const data = await response.json();
-        setImages(data.images || []);
-        if (data.images && data.images.length > 0) {
+        const jobId = data.job_id;
+        if (!jobId) {
+          throw new Error("No job ID returned from server.");
+        }
+
+        // Poll for completion
+        let completed = false;
+        let attempts = 0;
+        const maxAttempts = 180; // 6 minutes max (allows for full cold start + VRAM model load)
+        let resultImages: string[] = [];
+
+        while (!completed && attempts < maxAttempts) {
+          // Wait 2 seconds before polling again
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          attempts++;
+
+          const statusRes = await fetch(`${API_BASE_URL}/api/job-status/${jobId}`);
+          if (!statusRes.ok) {
+            const statusDetail = await statusRes.json().catch(() => ({ detail: "Failed to poll status" }));
+            throw new Error(statusDetail.detail || "Failed to query status");
+          }
+
+          const statusData = await statusRes.json();
+          if (statusData.status === "completed") {
+            completed = true;
+            resultImages = statusData.result.images || [];
+          } else if (statusData.status === "failed") {
+            throw new Error(statusData.error || "Generation pipeline failed");
+          }
+        }
+
+        if (!completed) {
+          throw new Error("Generation request timed out. Please try again.");
+        }
+
+        setImages(resultImages);
+        if (resultImages.length > 0) {
           setSelectedIdx(0);
         }
       } catch (err: any) {

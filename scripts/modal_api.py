@@ -95,10 +95,10 @@ class Generate3DRequest(BaseModel):
 
 # --- 3. STAGE 1: FLUX GENERATION WORKER ---
 @app.cls(
-    gpu="A100",
+    gpu="L4",
     image=image,
     volumes={"/root/ComfyUI/models": vol},
-    scaledown_window=60,
+    scaledown_window=300,
     timeout=600
 )
 class ComfyFLUXWorker:
@@ -220,7 +220,7 @@ class ComfyFLUXWorker:
     image=image,
     volumes={"/root/ComfyUI/models": vol},
     network_file_systems={"/shared": nfs},
-    scaledown_window=60,
+    scaledown_window=300,
     timeout=600
 )
 class ComfySHARPWorker:
@@ -560,31 +560,19 @@ async def generate_2d(req: Generate2DRequest):
         raise HTTPException(status_code=400, detail=f"Failed to decode base64 images: {str(e)}")
 
     worker = ComfyFLUXWorker()
-    
-    # Launch variations in parallel via Modal remote calls
-    jobs = []
-    for _ in range(req.num_variations):
-        seed = random.randint(1, 10**15)
-        jobs.append(
-            worker.process.remote.aio(
-                user_img_bytes, 
-                kit_img_bytes, 
-                seed, 
-                req.prompt_override, 
-                FLUX_WORKFLOW_RAW
-            )
-        )
-
-    results_base64 = []
+    seed = random.randint(1, 10**15)
     try:
-        results = await asyncio.gather(*jobs)
-        for r_bytes in results:
-            img_b64 = "data:image/png;base64," + base64.b64encode(r_bytes).decode("utf-8")
-            results_base64.append(img_b64)
+        # Spawn job asynchronously in the background on Modal
+        call = worker.process.spawn(
+            user_img_bytes, 
+            kit_img_bytes, 
+            seed, 
+            req.prompt_override, 
+            FLUX_WORKFLOW_RAW
+        )
+        return {"status": "pending", "job_id": call.object_id}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"FLUX generation pipeline error: {str(e)}")
-
-    return {"images": results_base64}
+        raise HTTPException(status_code=500, detail=f"Failed to spawn FLUX job: {str(e)}")
 
 @web_app.post("/api/generate-3d")
 async def generate_3d(req: Generate3DRequest):
@@ -600,31 +588,77 @@ async def generate_3d(req: Generate3DRequest):
 
     worker = ComfySHARPWorker()
     try:
-        shared_filename = await worker.process.remote.aio(img_bytes, SHARP_WORKFLOW_RAW)
-        
-        # Convert PLY -> .splat and write to shared NFS
-        filepath = f"/shared/{shared_filename}"
-        with open(filepath, "rb") as f:
-            ply_bytes = f.read()
-        
-        splat_bytes = ply_to_splat(ply_bytes)
-        splat_filename = shared_filename.replace(".ply", ".splat")
-        splat_path = f"/shared/{splat_filename}"
-        with open(splat_path, "wb") as sf:
-            sf.write(splat_bytes)
-            
-        # Clean up the raw PLY file to save disk space
-        try:
-            os.remove(filepath)
-        except Exception:
-            pass
-        
-        return {
-            "plyUrl": f"/api/download-3d/{splat_filename}",
-            "filename": splat_filename
-        }
+        # Spawn job asynchronously in the background on Modal
+        call = worker.process.spawn(img_bytes, SHARP_WORKFLOW_RAW)
+        return {"status": "pending", "job_id": call.object_id}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"SHARP 3D generation pipeline error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to spawn SHARP job: {str(e)}")
+
+@web_app.get("/api/job-status/{job_id}")
+async def job_status(job_id: str):
+    try:
+        call = modal.FunctionCall.from_id(job_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid job ID: {str(e)}")
+
+    try:
+        # Non-blocking get check with a very short timeout
+        result = await call.get.aio(timeout=0.1)
+    except TimeoutError:
+        return {"status": "pending"}
+    except asyncio.TimeoutError:
+        return {"status": "pending"}
+    except Exception as e:
+        return {"status": "failed", "error": str(e)}
+
+    # Process and return the results based on type
+    try:
+        if isinstance(result, bytes):
+            # 2D Generation finished, return base64 images
+            img_b64 = "data:image/png;base64," + base64.b64encode(result).decode("utf-8")
+            return {
+                "status": "completed",
+                "result": {"images": [img_b64]}
+            }
+        elif isinstance(result, str):
+            # 3D Generation finished, convert PLY -> splat on the fly
+            shared_filename = result
+            filepath = f"/shared/{shared_filename}"
+            
+            # NFS propagation wait loop (wait up to 5s for files to sync across Modal containers)
+            for _ in range(10):
+                if os.path.exists(filepath):
+                    break
+                await asyncio.sleep(0.5)
+
+            if not os.path.exists(filepath):
+                raise Exception("Generated 3D PLY file not found on NetworkFileSystem.")
+
+            with open(filepath, "rb") as f:
+                ply_bytes = f.read()
+
+            splat_bytes = ply_to_splat(ply_bytes)
+            splat_filename = shared_filename.replace(".ply", ".splat")
+            splat_path = f"/shared/{splat_filename}"
+            with open(splat_path, "wb") as sf:
+                sf.write(splat_bytes)
+
+            try:
+                os.remove(filepath)
+            except Exception:
+                pass
+
+            return {
+                "status": "completed",
+                "result": {
+                    "plyUrl": f"/api/download-3d/{splat_filename}",
+                    "filename": splat_filename
+                }
+            }
+        else:
+            raise Exception("Unknown result type from job worker.")
+    except Exception as e:
+        return {"status": "failed", "error": f"Post-processing failed: {str(e)}"}
 
 @web_app.get("/api/download-3d/{filename}")
 def download_3d(filename: str):

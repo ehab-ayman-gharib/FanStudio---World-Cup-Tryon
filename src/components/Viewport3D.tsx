@@ -62,13 +62,43 @@ export default function Viewport3D({ selected2DImage, onBack }: Viewport3DProps)
         }
 
         const data = await res.json();
-
-        if (data.plyUrl) {
-          const fullUrl = data.plyUrl.startsWith("http") ? data.plyUrl : `${API_BASE_URL}${data.plyUrl}`;
-          setPlyUrl(fullUrl);
-        } else {
-          throw new Error("No 3D data received");
+        const jobId = data.job_id;
+        if (!jobId) {
+          throw new Error("No job ID returned from server.");
         }
+
+        // Poll for completion
+        let completed = false;
+        let attempts = 0;
+        const maxAttempts = 120; // 4 minutes max (allows for cold starts and 3D reconstruction)
+        let resultPlyUrl = "";
+
+        while (!completed && attempts < maxAttempts) {
+          // Wait 2 seconds before polling again
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          attempts++;
+
+          const statusRes = await fetch(`${API_BASE_URL}/api/job-status/${jobId}`);
+          if (!statusRes.ok) {
+            const statusDetail = await statusRes.json().catch(() => ({ detail: "Failed to poll status" }));
+            throw new Error(statusDetail.detail || "Failed to query status");
+          }
+
+          const statusData = await statusRes.json();
+          if (statusData.status === "completed") {
+            completed = true;
+            resultPlyUrl = statusData.result.plyUrl;
+          } else if (statusData.status === "failed") {
+            throw new Error(statusData.error || "3D Gaussian generation failed");
+          }
+        }
+
+        if (!completed || !resultPlyUrl) {
+          throw new Error("3D Generation request timed out. Please try again.");
+        }
+
+        const fullUrl = resultPlyUrl.startsWith("http") ? resultPlyUrl : `${API_BASE_URL}${resultPlyUrl}`;
+        setPlyUrl(fullUrl);
       } catch (err: any) {
         console.error("SHARP Error:", err);
         setError(err.message || "Failed to generate 3D Gaussian Splat model.");

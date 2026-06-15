@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import TeamSelector from "../components/TeamSelector";
 import CameraCapture from "../components/CameraCapture";
 import LookViewer2D from "../components/LookViewer2D";
 import Viewport3D from "../components/Viewport3D";
-// No lucide-react imports needed here
+import { API_BASE_URL } from "../config";
 
 interface TeamTheme {
   colors: string[];
@@ -24,6 +24,14 @@ export default function Home() {
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [selected2DImage, setSelected2DImage] = useState<string | null>(null);
+
+  // Trigger background pre-warming of Modal GPU containers on page mount
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/api/pre-warm`)
+      .then(res => res.json())
+      .then(data => console.log("Modal pre-warm status:", data))
+      .catch(err => console.error("Modal pre-warm failed:", err));
+  }, []);
 
   const handleSelectTeam = (team: Team) => {
     setSelectedTeam(team);
