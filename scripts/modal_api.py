@@ -236,7 +236,7 @@ class ComfyFLUXWorker:
                 workflow["75:66"]["inputs"]["width"] = 256
                 workflow["75:66"]["inputs"]["height"] = 256
             
-            self.process(dummy_bytes, dummy_bytes, 42, None, json.dumps(workflow))
+            self.process.local(dummy_bytes, dummy_bytes, 42, None, json.dumps(workflow))
             print("⚡ FLUX worker is fully warm!")
         except Exception as e:
             print(f"⚠️ FLUX pre-warming failed: {e}")
@@ -377,7 +377,7 @@ class ComfySHARPWorker:
         
         try:
             print("🔥 Pre-warming SHARP worker models...")
-            res_filename = self.process(dummy_bytes, SHARP_WORKFLOW_RAW)
+            res_filename = self.process.local(dummy_bytes, SHARP_WORKFLOW_RAW)
             try:
                 os.remove(f"/shared/{res_filename}")
             except Exception:
