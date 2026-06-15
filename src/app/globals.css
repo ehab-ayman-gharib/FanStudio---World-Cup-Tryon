@@ -132,3 +132,29 @@ body {
 .animate-text-glow {
   animation: text-glow 3s ease-in-out infinite;
 }
+
+@keyframes neon-glow-green {
+  0%, 100% {
+    text-shadow: 0 0 6px rgba(173, 255, 0, 0.2), 0 0 12px rgba(173, 255, 0, 0.1);
+  }
+  50% {
+    text-shadow: 0 0 16px rgba(173, 255, 0, 0.7), 0 0 28px rgba(173, 255, 0, 0.4);
+  }
+}
+
+.animate-neon-green {
+  animation: neon-glow-green 2.5s ease-in-out infinite;
+}
+
+@keyframes scan {
+  0%, 100% {
+    top: 0%;
+  }
+  50% {
+    top: 100%;
+  }
+}
+
+.animate-scan {
+  animation: scan 3.5s ease-in-out infinite;
+}

@@ -5,7 +5,7 @@ import os
 import time
 
 # Set PyTorch allocator configuration to prevent memory fragmentation OOMs
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:true"
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 import base64
 import random
 import subprocess
@@ -23,18 +23,18 @@ nfs = modal.NetworkFileSystem.from_name("fanstudio-shared-nfs", create_if_missin
 
 # Define base system image for ComfyUI running on CUDA
 image = (
-    modal.Image.from_registry("nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04", add_python="3.10")
+    modal.Image.debian_slim(python_version="3.10")
     .entrypoint([])
     .apt_install("git", "libgl1", "libglib2.0-0", "wget", "libgomp1", "ffmpeg")
+    .run_commands(
+        "pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121"
+    )
     .pip_install(
         "fastapi[standard]", 
         "python-multipart",
         "requests",
         "pillow",
         "numpy<2",
-        "torch",
-        "torchvision",
-        "torchaudio",
         "timm",
         "plyfile",
         "trimesh",
@@ -43,7 +43,7 @@ image = (
         "open-clip-torch",
         "diffusers",
         "transformers",
-        "onnxruntime-gpu==1.18.0"
+        "onnxruntime-gpu==1.19.0"
     )
     .run_commands(
         "git clone https://github.com/comfyanonymous/ComfyUI.git /root/ComfyUI",
@@ -98,47 +98,31 @@ class Generate3DRequest(BaseModel):
 
 # --- 3. STAGE 1: FLUX GENERATION WORKER ---
 @app.cls(
-    gpu="L4",
+    gpu="A100",
     cpu=4.0,
     memory=32768,
     image=image,
     volumes={"/root/ComfyUI/models": vol},
     scaledown_window=300,
-    timeout=600
+    timeout=600,
+    max_containers=1
 )
 class ComfyFLUXWorker:
+    is_warmed_up = False
     @modal.enter()
     def start_comfy_server(self):
-        # 1. Link ControlNet Aux checkpoints to the persistent volume to prevent downloading them on every cold start
-        os.makedirs("/root/ComfyUI/models/controlnet_aux", exist_ok=True)
-        
-        # Copy from image cache to persistent volume if missing
+        # 1. Link ControlNet Aux checkpoints directly from local image cache (SSD) instead of persistent volume
+        # This prevents network file system latency (which takes 12 seconds to load)
         import shutil
-        cache_yolox = "/root/controlnet_aux_cache/yzd-v/DWPose/yolox_l.onnx"
-        target_yolox = "/root/ComfyUI/models/controlnet_aux/yzd-v/DWPose/yolox_l.onnx"
-        if os.path.exists(cache_yolox) and not os.path.exists(target_yolox):
-            print("📦 Restoring yolox_l.onnx from image cache to volume...")
-            os.makedirs(os.path.dirname(target_yolox), exist_ok=True)
-            shutil.copy(cache_yolox, target_yolox)
-            
-        cache_dwpose = "/root/controlnet_aux_cache/hr16/DWPose-TorchScript-BatchSize5/dw-ll_ucoco_384_bs5.torchscript.pt"
-        target_dwpose = "/root/ComfyUI/models/controlnet_aux/hr16/DWPose-TorchScript-BatchSize5/dw-ll_ucoco_384_bs5.torchscript.pt"
-        if os.path.exists(cache_dwpose) and not os.path.exists(target_dwpose):
-            print("📦 Restoring dw-ll_ucoco_384_bs5.torchscript.pt from image cache to volume...")
-            os.makedirs(os.path.dirname(target_dwpose), exist_ok=True)
-            shutil.copy(cache_dwpose, target_dwpose)
-
         aux_ckpts_path = "/root/ComfyUI/custom_nodes/comfyui_controlnet_aux/ckpts"
         if os.path.exists(aux_ckpts_path) and not os.path.islink(aux_ckpts_path):
             try:
-                for item in os.listdir(aux_ckpts_path):
-                    shutil.move(os.path.join(aux_ckpts_path, item), os.path.join("/root/ComfyUI/models/controlnet_aux", item))
-                os.rmdir(aux_ckpts_path)
+                shutil.rmtree(aux_ckpts_path)
             except Exception as e:
-                print(f"Error migrating auxiliary checkpoints: {e}")
+                print(f"Error removing default aux ckpts folder: {e}")
         if not os.path.exists(aux_ckpts_path):
-            os.symlink("/root/ComfyUI/models/controlnet_aux", aux_ckpts_path)
-            print("🔗 Symlinked ControlNet auxiliary checkpoints to persistent volume!")
+            os.symlink("/root/controlnet_aux_cache", aux_ckpts_path)
+            print("🔗 Symlinked ControlNet auxiliary checkpoints to local image cache!")
 
         try:
             response = requests.get("http://127.0.0.1:8188/history", timeout=1)
@@ -148,11 +132,14 @@ class ComfyFLUXWorker:
         except Exception:
             pass
 
-        print("🌀 Launching FLUX ComfyUI instance on L4 (GPU-only, native precision)...")
+        print("🌀 Launching FLUX ComfyUI instance on L4 (highvram defaults)...")
         subprocess.Popen([
             "python", "main.py", 
             "--listen", "127.0.0.1", 
-            "--gpu-only"
+            "--disable-auto-launch",
+            "--enable-manager",
+            "--port", "8188",
+            "--enable-cors-header", "*"
         ], cwd="/root/ComfyUI")
         
         for _ in range(45):
@@ -215,7 +202,8 @@ class ComfyFLUXWorker:
                     status_info = history[prompt_id].get("status", {})
                     raise Exception(f"Output node {save_node} not found. Available output nodes: {list(outputs.keys())}. Status: {status_info}")
             time.sleep(0.5)
-
+        
+        ComfyFLUXWorker.is_warmed_up = True
         output_path = f"/root/ComfyUI/output/{filename}"
         try:
             from PIL import Image
@@ -232,6 +220,10 @@ class ComfyFLUXWorker:
 
     @modal.method()
     def warmup(self) -> str:
+        if ComfyFLUXWorker.is_warmed_up:
+            print("♻️ FLUX worker is already warm, skipping dummy run.")
+            return "ok"
+            
         global FLUX_WORKFLOW_RAW
         if not FLUX_WORKFLOW_RAW:
             load_workflows()
@@ -253,6 +245,7 @@ class ComfyFLUXWorker:
                 workflow["75:66"]["inputs"]["height"] = 256
             
             self.process.local(dummy_bytes, dummy_bytes, 42, None, json.dumps(workflow))
+            ComfyFLUXWorker.is_warmed_up = True
             print("⚡ FLUX worker is fully warm!")
         except Exception as e:
             print(f"⚠️ FLUX pre-warming failed: {e}")
@@ -265,7 +258,8 @@ class ComfyFLUXWorker:
     volumes={"/root/ComfyUI/models": vol},
     network_file_systems={"/shared": nfs},
     scaledown_window=300,
-    timeout=600
+    timeout=600,
+    max_containers=1
 )
 class ComfySHARPWorker:
     @modal.enter()
@@ -275,8 +269,8 @@ class ComfySHARPWorker:
         cache_sharp = "/root/sharp_cache/sharp_2572gikvuh.pt"
         target_sharp = "/root/ComfyUI/models/sharp/sharp_2572gikvuh.pt"
         if os.path.exists(cache_sharp) and not os.path.exists(target_sharp):
-            print("📦 Restoring SHARP model checkpoint from image cache to volume...")
-            shutil.copy(cache_sharp, target_sharp)
+            print("🔗 Symlinking SHARP model checkpoint from local image cache...")
+            os.symlink(cache_sharp, target_sharp)
 
         try:
             response = requests.get("http://127.0.0.1:8188/history", timeout=1)

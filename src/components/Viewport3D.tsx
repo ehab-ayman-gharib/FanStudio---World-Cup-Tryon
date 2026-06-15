@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Splat } from "@react-three/drei";
-import { Loader2, ArrowLeft, Download, Smartphone, RotateCcw, Eye, Box } from "lucide-react";
+import { Loader2, ArrowLeft, Download, Smartphone, RotateCcw, Eye, Box, AlertTriangle } from "lucide-react";
 import * as THREE from "three";
 import { API_BASE_URL } from "../config";
 
@@ -196,9 +196,9 @@ export default function Viewport3D({ selected2DImage, onBack }: Viewport3DProps)
 
   if (error) {
     return (
-      <div className="w-full max-w-md mx-auto bg-[#1b1e22]/90 border border-[#282d34] rounded-3xl p-6 shadow-2xl backdrop-blur-xl flex flex-col items-center justify-center gap-6 text-center animate-fade-in-up">
+      <div className="w-full max-w-md mx-auto bg-[#1b1e22]/90 border border-[#282d34] rounded-3xl p-6 shadow-2xl backdrop-blur-xl flex flex-col items-center justify-center gap-6 text-center animate-fade-in-up min-h-[400px]">
         <div className="w-12 h-12 rounded-full bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-500">
-          <ArrowLeft className="w-6 h-6" />
+          <AlertTriangle className="w-6 h-6" />
         </div>
         <div>
           <h3 className="text-white font-headline text-xl uppercase tracking-wider">SHARP FAILURE</h3>
