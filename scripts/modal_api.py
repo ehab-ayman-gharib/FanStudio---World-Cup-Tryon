@@ -77,6 +77,10 @@ image = (
     .run_commands(
         "pip install \"numpy<2\""
     )
+    # Cache Apple SHARP model checkpoint to speed up cold starts
+    .run_commands(
+        "mkdir -p /root/sharp_cache && wget -q https://ml-site.cdn-apple.com/models/sharp/sharp_2572gikvuh.pt -O /root/sharp_cache/sharp_2572gikvuh.pt"
+    )
 )
 
 # --- 2. REQUEST SCHEMAS ---
@@ -151,6 +155,7 @@ class ComfyFLUXWorker:
                 response = requests.get("http://127.0.0.1:8188/history")
                 if response.status_code == 200:
                     print("⚡ FLUX ComfyUI server is warm!")
+                    time.sleep(2.5)  # Settle time to let background imports/subsystems finish initializing
                     return
             except requests.exceptions.ConnectionError:
                 time.sleep(1)
@@ -221,36 +226,13 @@ class ComfyFLUXWorker:
 class ComfySHARPWorker:
     @modal.enter()
     def start_comfy_server(self):
-        # 1. Link ControlNet Aux checkpoints to the persistent volume to prevent downloading them on every cold start
-        os.makedirs("/root/ComfyUI/models/controlnet_aux", exist_ok=True)
-        
-        # Copy from image cache to persistent volume if missing
         import shutil
-        cache_yolox = "/root/controlnet_aux_cache/yzd-v/DWPose/yolox_l.onnx"
-        target_yolox = "/root/ComfyUI/models/controlnet_aux/yzd-v/DWPose/yolox_l.onnx"
-        if os.path.exists(cache_yolox) and not os.path.exists(target_yolox):
-            print("📦 Restoring yolox_l.onnx from image cache to volume...")
-            os.makedirs(os.path.dirname(target_yolox), exist_ok=True)
-            shutil.copy(cache_yolox, target_yolox)
-            
-        cache_dwpose = "/root/controlnet_aux_cache/hr16/DWPose-TorchScript-BatchSize5/dw-ll_ucoco_384_bs5.torchscript.pt"
-        target_dwpose = "/root/ComfyUI/models/controlnet_aux/hr16/DWPose-TorchScript-BatchSize5/dw-ll_ucoco_384_bs5.torchscript.pt"
-        if os.path.exists(cache_dwpose) and not os.path.exists(target_dwpose):
-            print("📦 Restoring dw-ll_ucoco_384_bs5.torchscript.pt from image cache to volume...")
-            os.makedirs(os.path.dirname(target_dwpose), exist_ok=True)
-            shutil.copy(cache_dwpose, target_dwpose)
-
-        aux_ckpts_path = "/root/ComfyUI/custom_nodes/comfyui_controlnet_aux/ckpts"
-        if os.path.exists(aux_ckpts_path) and not os.path.islink(aux_ckpts_path):
-            try:
-                for item in os.listdir(aux_ckpts_path):
-                    shutil.move(os.path.join(aux_ckpts_path, item), os.path.join("/root/ComfyUI/models/controlnet_aux", item))
-                os.rmdir(aux_ckpts_path)
-            except Exception as e:
-                print(f"Error migrating auxiliary checkpoints: {e}")
-        if not os.path.exists(aux_ckpts_path):
-            os.symlink("/root/ComfyUI/models/controlnet_aux", aux_ckpts_path)
-            print("🔗 Symlinked ControlNet auxiliary checkpoints to persistent volume!")
+        os.makedirs("/root/ComfyUI/models/sharp", exist_ok=True)
+        cache_sharp = "/root/sharp_cache/sharp_2572gikvuh.pt"
+        target_sharp = "/root/ComfyUI/models/sharp/sharp_2572gikvuh.pt"
+        if os.path.exists(cache_sharp) and not os.path.exists(target_sharp):
+            print("📦 Restoring SHARP model checkpoint from image cache to volume...")
+            shutil.copy(cache_sharp, target_sharp)
 
         try:
             response = requests.get("http://127.0.0.1:8188/history", timeout=1)
@@ -272,6 +254,7 @@ class ComfySHARPWorker:
                 response = requests.get("http://127.0.0.1:8188/history")
                 if response.status_code == 200:
                     print("⚡ SHARP ComfyUI server is warm!")
+                    time.sleep(2.5)  # Settle time to let background imports/subsystems finish initializing
                     return
             except requests.exceptions.ConnectionError:
                 time.sleep(1)
