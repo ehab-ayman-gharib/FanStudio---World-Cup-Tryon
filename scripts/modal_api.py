@@ -143,10 +143,11 @@ class ComfyFLUXWorker:
         except Exception:
             pass
 
-        print("🌀 Launching FLUX ComfyUI instance on A100...")
+        print("🌀 Launching FLUX ComfyUI instance on L4 (GPU-only)...")
         subprocess.Popen([
             "python", "main.py", 
             "--listen", "127.0.0.1", 
+            "--gpu-only",
             "--force-fp16"
         ], cwd="/root/ComfyUI")
         
@@ -159,7 +160,7 @@ class ComfyFLUXWorker:
                     return
             except requests.exceptions.ConnectionError:
                 time.sleep(1)
-        raise Exception("ComfyUI server failed to initialize on A100.")
+        raise Exception("ComfyUI server failed to initialize on L4.")
 
     @modal.method()
     def process(self, user_img_bytes: bytes, kit_img_bytes: bytes, seed: int, prompt_override: str | None, workflow_json_str: str) -> bytes:
@@ -187,6 +188,7 @@ class ComfyFLUXWorker:
             workflow["75:73"]["inputs"]["noise_seed"] = seed
         if "75:74" in workflow and prompt_override and prompt_override.strip():
             workflow["75:74"]["inputs"]["text"] = prompt_override
+
 
         # Submit prompt
         prompt_res = requests.post("http://127.0.0.1:8188/prompt", json={"prompt": workflow}).json()
