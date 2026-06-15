@@ -3,6 +3,9 @@ import asyncio
 import json
 import os
 import time
+
+# Set PyTorch allocator configuration to prevent memory fragmentation OOMs
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:true"
 import base64
 import random
 import subprocess
@@ -145,11 +148,11 @@ class ComfyFLUXWorker:
         except Exception:
             pass
 
-        print("🌀 Launching FLUX ComfyUI instance on L4...")
+        print("🌀 Launching FLUX ComfyUI instance on L4 (GPU-only, native precision)...")
         subprocess.Popen([
             "python", "main.py", 
             "--listen", "127.0.0.1", 
-            "--force-fp16"
+            "--gpu-only"
         ], cwd="/root/ComfyUI")
         
         for _ in range(45):
@@ -375,30 +378,7 @@ class ComfySHARPWorker:
                 
         return shared_filename
 
-    @modal.method()
-    def warmup(self) -> str:
-        global SHARP_WORKFLOW_RAW
-        if not SHARP_WORKFLOW_RAW:
-            load_workflows()
-        
-        from PIL import Image
-        from io import BytesIO
-        img = Image.new("RGB", (256, 256), color="gray")
-        buf = BytesIO()
-        img.save(buf, format="PNG")
-        dummy_bytes = buf.getvalue()
-        
-        try:
-            print("🔥 Pre-warming SHARP worker models...")
-            res_filename = self.process.local(dummy_bytes, SHARP_WORKFLOW_RAW)
-            try:
-                os.remove(f"/shared/{res_filename}")
-            except Exception:
-                pass
-            print("⚡ SHARP worker is fully warm!")
-        except Exception as e:
-            print(f"⚠️ SHARP pre-warming failed: {e}")
-        return "ok"
+
 
 # --- 5. FASTAPI CPU ROUTER TIER ---
 web_app = FastAPI(title="FanStudio Modal API", description="Production serverless API hosted on Modal")
@@ -418,10 +398,8 @@ def health():
 @web_app.get("/api/pre-warm")
 def pre_warm():
     flux_worker = ComfyFLUXWorker()
-    sharp_worker = ComfySHARPWorker()
-    # Spawn enqueues the tasks on Modal's cloud queue instantly, starting the GPU instances in the background
+    # Spawn enqueues the task on Modal's cloud queue instantly, starting the GPU instance in the background
     flux_worker.warmup.spawn()
-    sharp_worker.warmup.spawn()
     return {"status": "warming"}
 
 # Host workflow definitions inside the CPU router to read and inject
