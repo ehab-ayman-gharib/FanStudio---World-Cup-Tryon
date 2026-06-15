@@ -96,6 +96,8 @@ class Generate3DRequest(BaseModel):
 # --- 3. STAGE 1: FLUX GENERATION WORKER ---
 @app.cls(
     gpu="L4",
+    cpu=4.0,
+    memory=32768,
     image=image,
     volumes={"/root/ComfyUI/models": vol},
     scaledown_window=300,
@@ -143,11 +145,10 @@ class ComfyFLUXWorker:
         except Exception:
             pass
 
-        print("🌀 Launching FLUX ComfyUI instance on L4 (GPU-only)...")
+        print("🌀 Launching FLUX ComfyUI instance on L4...")
         subprocess.Popen([
             "python", "main.py", 
             "--listen", "127.0.0.1", 
-            "--gpu-only",
             "--force-fp16"
         ], cwd="/root/ComfyUI")
         
@@ -213,8 +214,18 @@ class ComfyFLUXWorker:
             time.sleep(0.5)
 
         output_path = f"/root/ComfyUI/output/{filename}"
-        with open(output_path, "rb") as f:
-            return f.read()
+        try:
+            from PIL import Image
+            import io
+            with Image.open(output_path) as img:
+                out_buf = io.BytesIO()
+                # Convert to high-quality compressed JPEG to speed up network payload transfer (3MB -> ~300KB)
+                img.convert("RGB").save(out_buf, format="JPEG", quality=85)
+                return out_buf.getvalue()
+        except Exception as e:
+            print(f"⚠️ Image compression failed, falling back to raw bytes: {e}")
+            with open(output_path, "rb") as f:
+                return f.read()
 
     @modal.method()
     def warmup(self) -> str:
@@ -678,8 +689,14 @@ async def job_status(job_id: str):
     # Process and return the results based on type
     try:
         if isinstance(result, bytes):
-            # 2D Generation finished, return base64 images
-            img_b64 = "data:image/png;base64," + base64.b64encode(result).decode("utf-8")
+            # 2D Generation finished, return base64 images (detecting format prefix)
+            mime = "image/png"
+            if len(result) > 4:
+                if result[:3] == b"\xff\xd8\xff":
+                    mime = "image/jpeg"
+                elif result[:4] == b"RIFF" and result[8:12] == b"WEBP":
+                    mime = "image/webp"
+            img_b64 = f"data:{mime};base64," + base64.b64encode(result).decode("utf-8")
             return {
                 "status": "completed",
                 "result": {"images": [img_b64]}
