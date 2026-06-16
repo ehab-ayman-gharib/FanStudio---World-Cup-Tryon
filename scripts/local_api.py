@@ -289,8 +289,19 @@ def health():
     }
 
 
+def free_comfyui_memory():
+    """Tells ComfyUI to unload unused models and free up GPU memory."""
+    try:
+        requests.post(f"{COMFYUI_URL}/free", json={"unload_models": True, "free_memory": True}, timeout=3)
+        print("🧹 Cleared ComfyUI VRAM and cache.")
+    except Exception as e:
+        print(f"⚠️ Could not clear ComfyUI memory: {e}")
+
+
 def run_generate_2d_task(job_id: str, req: Generate2DRequest):
     try:
+        # Free VRAM from previous runs (e.g. SHARP) before starting FLUX
+        free_comfyui_memory()
         # 1. Decode kit reference image
         kit_img_data = req.kit_image
         if "," in kit_img_data:
@@ -379,6 +390,8 @@ async def generate_2d(req: Generate2DRequest, background_tasks: BackgroundTasks)
 
 def run_generate_3d_task(job_id: str, req: Generate3DRequest):
     try:
+        # Free VRAM from previous runs (e.g. FLUX) before starting SHARP
+        free_comfyui_memory()
         # 1. Decode target image
         img_data = req.image
         if "," in img_data:

@@ -370,15 +370,6 @@ export default function TeamSelector({ onSelectTeam, selectedTeam }: TeamSelecto
               <div className="flex flex-col gap-4">
                 <GarmentPreview filename={activeTeam.filename} />
               </div>
-
-              {/* Confirm selection button (in preview pane) */}
-              <button
-                onClick={() => onSelectTeam(activeTeam)}
-                className="w-full bg-[#ADFF00] hover:bg-[#ADFF00]/95 text-[#121417] font-headline tracking-wide uppercase py-4 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-[#ADFF00]/10 hover:shadow-[#ADFF00]/20 transition-all text-sm font-extrabold cursor-pointer"
-              >
-                <Trophy className="w-5 h-5" />
-                CONFIRM SQUAD
-              </button>
             </div>
           </div>
         )}
@@ -403,7 +394,8 @@ export default function TeamSelector({ onSelectTeam, selectedTeam }: TeamSelecto
               : "bg-[#1b1e22] text-slate-600 cursor-not-allowed border border-[#282d34]/60"
             }`}
         >
-          NEXT
+          <Trophy className="w-4 h-4" />
+          CONFIRM SQUAD
         </button>
       </div>
     </div>

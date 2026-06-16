@@ -22,14 +22,57 @@ interface Viewport3DProps {
 }
 
 // Internal component to handle gyro tilting on frame renders
-function TiltingGroup({ children, gyroOffset }: { children: React.ReactNode; gyroOffset: { x: number; y: number } }) {
+function TiltingGroup({
+  children,
+  gyroOffset,
+  autoOrbit,
+  setAutoOrbit,
+  lastInteractionTime,
+  targetX,
+  targetY,
+  targetZ,
+  controlsRef
+}: {
+  children: React.ReactNode;
+  gyroOffset: { x: number; y: number };
+  autoOrbit: boolean;
+  setAutoOrbit: (val: boolean) => void;
+  lastInteractionTime: React.MutableRefObject<number>;
+  targetX: number;
+  targetY: number;
+  targetZ: number;
+  controlsRef: React.MutableRefObject<any>;
+}) {
   const groupRef = useRef<THREE.Group | null>(null);
 
   useFrame(() => {
+    // Re-enable auto-orbit if idle for 10 seconds
+    if (!autoOrbit && Date.now() - lastInteractionTime.current > 10000) {
+      setAutoOrbit(true);
+    }
+
+    if (controlsRef.current) {
+      const controls = controlsRef.current;
+      controls.target.x = THREE.MathUtils.lerp(controls.target.x, targetX, 0.05);
+      controls.target.y = THREE.MathUtils.lerp(controls.target.y, targetY, 0.05);
+      controls.target.z = THREE.MathUtils.lerp(controls.target.z, targetZ, 0.05);
+      controls.update();
+    }
+
     if (groupRef.current) {
+      let targetRotY = gyroOffset.x * 0.4;
+      let targetRotX = gyroOffset.y * 0.4;
+
+      if (autoOrbit) {
+        // Add a gentle 2D circular orbit (Lissajous path) for vertical and horizontal depth
+        const elapsed = performance.now() / 1000;
+        targetRotY += Math.sin(elapsed * 1.5) * 0.18;
+        targetRotX += Math.cos(elapsed * 1.5) * 0.06;
+      }
+
       // Smoothly lerp towards target gyro orientation
-      groupRef.current.rotation.y = THREE.MathUtils.lerp(groupRef.current.rotation.y, gyroOffset.x * 0.4, 0.05);
-      groupRef.current.rotation.x = THREE.MathUtils.lerp(groupRef.current.rotation.x, gyroOffset.y * 0.4, 0.05);
+      groupRef.current.rotation.y = THREE.MathUtils.lerp(groupRef.current.rotation.y, targetRotY, 0.05);
+      groupRef.current.rotation.x = THREE.MathUtils.lerp(groupRef.current.rotation.x, targetRotX, 0.05);
     }
   });
 
@@ -43,7 +86,21 @@ export default function Viewport3D({ selected2DImage, onBack, selectedTeam, onRe
   const [gyroOffset, setGyroOffset] = useState({ x: 0, y: 0 });
   const [gyroPermission, setGyroPermission] = useState<"granted" | "denied" | "default">("default");
   const [show2D, setShow2D] = useState(false);
+  const [autoOrbit, setAutoOrbit] = useState(true);
+  const [targetX, setTargetX] = useState(0);
+  const [targetY, setTargetY] = useState(-1);
+  const [targetZ, setTargetZ] = useState(-2);
+  const lastInteractionTime = useRef(Date.now());
   const hasTriggered = useRef(false);
+
+  // Reset auto-orbit on model load
+  useEffect(() => {
+    setAutoOrbit(true);
+    setTargetX(0);
+    setTargetY(-1);
+    setTargetZ(-2);
+    lastInteractionTime.current = Date.now();
+  }, [plyUrl]);
 
   // Fetch PLY file from API
   useEffect(() => {
@@ -163,6 +220,12 @@ export default function Viewport3D({ selected2DImage, onBack, selectedTeam, onRe
   const controlsRef = useRef<any>(null);
 
   const handleResetView = () => {
+    setAutoOrbit(true);
+    setTargetX(0);
+    setTargetY(-1);
+    setTargetZ(-2);
+    lastInteractionTime.current = Date.now();
+
     if (controlsRef.current) {
       const controls = controlsRef.current;
       const camera = controls.object;
@@ -252,8 +315,40 @@ export default function Viewport3D({ selected2DImage, onBack, selectedTeam, onRe
                 <ambientLight intensity={1.5} />
                 <directionalLight position={[5, 5, 5]} intensity={1.5} />
                 
-                <TiltingGroup gyroOffset={gyroOffset}>
+                <TiltingGroup
+                  gyroOffset={gyroOffset}
+                  autoOrbit={autoOrbit}
+                  setAutoOrbit={setAutoOrbit}
+                  lastInteractionTime={lastInteractionTime}
+                  targetX={targetX}
+                  targetY={targetY}
+                  targetZ={targetZ}
+                  controlsRef={controlsRef}
+                >
                   <Splat src={plyUrl} scale={3} position={[0, -0.3, 0]} />
+                  
+                  {/* Invisible touch-to-focus collider mesh */}
+                  <mesh
+                    position={[0, -1, -2]}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      
+                      // Clamp click coordinates relative to target center [0, -1, -2]
+                      const clickX = Math.max(-0.4, Math.min(0.4, e.point.x));
+                      const clickY = Math.max(-2.2, Math.min(0.2, e.point.y));
+                      const clickZ = Math.max(-2.5, Math.min(-1.5, e.point.z));
+
+                      setTargetX(clickX);
+                      setTargetY(clickY);
+                      setTargetZ(clickZ);
+                      
+                      setAutoOrbit(false);
+                      lastInteractionTime.current = Date.now();
+                    }}
+                  >
+                    <boxGeometry args={[1.5, 3.2, 0.5]} />
+                    <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+                  </mesh>
                 </TiltingGroup>
 
                 <OrbitControls
@@ -263,11 +358,18 @@ export default function Viewport3D({ selected2DImage, onBack, selectedTeam, onRe
                   enablePan={false}
                   minDistance={2.0}
                   maxDistance={3.5}
-                  minAzimuthAngle={-0.06}
-                  maxAzimuthAngle={0.06}
-                  minPolarAngle={1.3}
-                  maxPolarAngle={1.5}
+                  minAzimuthAngle={-0.18}
+                  maxAzimuthAngle={0.18}
+                  minPolarAngle={1.2}
+                  maxPolarAngle={1.6}
                   target={[0, -1, -2]}
+                  onStart={() => {
+                    setAutoOrbit(false);
+                    lastInteractionTime.current = Date.now();
+                  }}
+                  onChange={() => {
+                    lastInteractionTime.current = Date.now();
+                  }}
                   makeDefault
                 />
               </Canvas>

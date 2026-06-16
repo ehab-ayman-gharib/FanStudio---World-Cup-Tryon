@@ -1,17 +1,17 @@
 import struct
 import os
+import glob
 
-splat_path = r"d:\Work\World-Cup-Kits-Tryon\FanStudio - World Cup 2026\scripts\.splat_cache\sharp_1781225113936.splat"
+cache_dir = r"d:\Work\World-Cup-Kits-Tryon\FanStudio---World-Cup-Tryon\scripts\.splat_cache"
+splat_files = glob.glob(os.path.join(cache_dir, "*.splat"))
 
-if os.path.exists(splat_path):
+for splat_path in splat_files[:5]:
     with open(splat_path, "rb") as f:
         data = f.read()
     
     n_points = len(data) // 32
-    print("Num points:", n_points)
-    
     xs, ys, zs = [], [], []
-    for i in range(min(n_points, 100000)):  # Sample or read all
+    for i in range(min(n_points, 10000)):  # Read first 10k points
         offset = i * 32
         px, py, pz = struct.unpack_from("<fff", data, offset)
         xs.append(px)
@@ -19,8 +19,9 @@ if os.path.exists(splat_path):
         zs.append(pz)
         
     centroid = [sum(xs)/len(xs), sum(ys)/len(ys), sum(zs)/len(zs)]
-    print("Centroid (first 100k):", centroid)
-    print("Min:", [min(xs), min(ys), min(zs)])
-    print("Max:", [max(xs), max(ys), max(zs)])
-else:
-    print("File not found")
+    print(f"File: {os.path.basename(splat_path)}")
+    print(f"  Points: {n_points}")
+    print(f"  Centroid: {centroid}")
+    print(f"  Min: {[min(xs), min(ys), min(zs)]}")
+    print(f"  Max: {[max(xs), max(ys), max(zs)]}")
+
