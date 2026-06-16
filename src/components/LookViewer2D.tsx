@@ -40,7 +40,50 @@ export default function LookViewer2D({
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [zoomStyle, setZoomStyle] = useState<React.CSSProperties>({
+    transformOrigin: "center center",
+    transform: "scale(1)",
+  });
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - left) / width) * 100;
+    const y = ((e.clientY - top) / height) * 100;
+
+    setZoomStyle({
+      transformOrigin: `${x}% ${y}%`,
+      transform: "scale(1.25)",
+    });
+  };
+
+  const handleMouseLeave = () => {
+    setZoomStyle({
+      transformOrigin: "center center",
+      transform: "scale(1)",
+    });
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
+      const x = ((touch.clientX - left) / width) * 100;
+      const y = ((touch.clientY - top) / height) * 100;
+
+      setZoomStyle({
+        transformOrigin: `${x}% ${y}%`,
+        transform: "scale(1.35)",
+      });
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setZoomStyle({
+      transformOrigin: "center center",
+      transform: "scale(1)",
+    });
+  };
+
   const hasTriggered = useRef(false);
  
   // Cycle loader messages
@@ -449,18 +492,19 @@ export default function LookViewer2D({
         {/* MAIN HUD LAYOUT CONTENT */}
         <div className="flex flex-col md:flex-row gap-8 items-center justify-center animate-fade-in relative mt-2">
           
-          {/* Portrait Photo Viewport with Kiosk HUD guide framing */}
-          <div className="w-full max-w-sm aspect-[3/4] rounded-[32px] overflow-hidden border-2 shadow-2xl relative bg-[#121417] flex flex-col justify-between"
-               style={{ borderColor: primaryColor, boxShadow: `0 0 30px ${primaryColor}20` }}>
+          {/* Portrait Photo Viewport with Kiosk HUD guide framing with hover zoom-and-pan */}
+          <div className="w-full max-w-sm aspect-[3/4] rounded-[32px] overflow-hidden border-2 shadow-2xl relative bg-[#121417] flex flex-col justify-between cursor-zoom-in group"
+               style={{ borderColor: primaryColor, boxShadow: `0 0 30px ${primaryColor}20` }}
+               onMouseMove={handleMouseMove}
+               onMouseLeave={handleMouseLeave}
+               onTouchStart={handleTouchMove}
+               onTouchMove={handleTouchMove}
+               onTouchEnd={handleTouchEnd}>
             
-            {/* Zoom button overlay */}
-            <button
-              onClick={() => setIsFullscreen(true)}
-              className="absolute top-4 right-4 bg-[#121417]/80 hover:bg-[#121417] border border-[#282d34] p-2.5 rounded-xl text-[#00F0FF] hover:scale-105 transition-all shadow-md cursor-pointer z-20"
-              title="Zoom Fullscreen"
-            >
-              <ZoomIn className="w-4.5 h-4.5" />
-            </button>
+            {/* Zoom hint overlay indicator, disappears on hover */}
+            <div className="absolute top-3 right-3 bg-[#121417]/80 border border-[#282d34] p-2 rounded-xl text-slate-400 group-hover:opacity-0 transition-opacity z-20 pointer-events-none shadow-sm">
+              <ZoomIn className="w-4 h-4 text-[#ADFF00]" />
+            </div>
    
             {/* HUD CORNER BRACKETS */}
             <div className="absolute inset-4 border border-white/5 pointer-events-none z-10 rounded-2xl">
@@ -474,26 +518,25 @@ export default function LookViewer2D({
               <div className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-[#ADFF00]" />
             </div>
 
-            {/* Glowing Center Guideline scan path */}
-            <div className="absolute top-1/2 left-4 right-4 h-[2px] bg-[#00F0FF]/80 shadow-[0_0_8px_rgba(0,240,255,0.7)] pointer-events-none z-10" />
-
-            {/* Dynamic SELECTED badge overlay in bottom-right */}
-            <div className="absolute bottom-4 right-4 bg-[#121417]/85 border border-[#282d34] px-3 py-1.5 rounded-xl text-[8px] tracking-widest text-[#ADFF00] font-label font-bold uppercase z-10 shadow-lg">
-              {teamCode} SELECTED
-            </div>
-
             {/* Core Generated Look Image */}
             <img
               src={images[0]}
-              alt="Generated 2D kit look"
-              className="w-full h-full object-cover relative z-0"
+              alt="Generated kit look"
+              className="w-full h-full object-cover relative z-0 transition-transform"
+              style={{
+                ...zoomStyle,
+                objectPosition: "top",
+                transition: zoomStyle.transform === "scale(1)"
+                  ? "transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)"
+                  : "transform 0.08s ease-out"
+              }}
             />
           </div>
    
           {/* Action Control Panel */}
           <div className="w-full md:w-80 flex flex-col gap-5 bg-[#1b1e22]/90 border border-[#282d34] rounded-[32px] p-6 backdrop-blur-xl shadow-xl">
             <div>
-              <h2 className="text-2xl font-headline tracking-wider text-white uppercase leading-none">YOUR 2D LOOK</h2>
+              <h2 className="text-2xl font-headline tracking-wider text-white uppercase leading-none">YOUR MATCHDAY LOOK</h2>
               <p className="text-slate-500 text-xs mt-2 font-body leading-relaxed">
                 Successfully generated your {selectedTeam.name} kit avatar!
               </p>
@@ -513,7 +556,7 @@ export default function LookViewer2D({
                 className="w-full bg-[#121417] hover:bg-[#121417]/80 text-white font-headline tracking-widest uppercase py-4 rounded-2xl flex items-center justify-center gap-2 border border-[#282d34] transition-all text-xs font-bold cursor-pointer"
               >
                 <Download className="w-4 h-4 text-slate-400" />
-                DOWNLOAD FLAT 2D
+                DOWNLOAD PHOTO
               </button>
             </div>
    
@@ -527,28 +570,6 @@ export default function LookViewer2D({
               </button>
             </div>
           </div>
-   
-          {/* Fullscreen modal zoom overlay */}
-          {isFullscreen && (
-            <div
-              className="fixed inset-0 bg-[#121417]/95 backdrop-blur-md flex items-center justify-center z-[9999] animate-fade-in cursor-zoom-out"
-              onClick={() => setIsFullscreen(false)}
-            >
-              <div className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 p-2.5 rounded-full text-white transition-all cursor-pointer">
-                <X className="w-6 h-6" />
-              </div>
-              <div
-                className="relative max-w-[90vw] max-h-[90vh] aspect-[3/4] rounded-3xl overflow-hidden border border-white/10 shadow-2xl"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <img
-                  src={images[0]}
-                  alt="Fullscreen look"
-                  className="w-full h-full object-contain"
-                />
-              </div>
-            </div>
-          )}
         </div>
       </div>
     );
@@ -636,7 +657,7 @@ export default function LookViewer2D({
                 <img
                   src={img}
                   alt={`Variation ${idx + 1}`}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover object-top"
                 />
                 
                 {/* Image selection badge */}
@@ -660,15 +681,17 @@ export default function LookViewer2D({
    
           {selectedIdx !== null && images[selectedIdx] ? (
             <div className="flex flex-col gap-4">
-              <div className="relative aspect-[3/4] rounded-2xl overflow-hidden border border-[#282d34]">
-                {/* Zoom button overlay */}
-                <button
-                  onClick={() => setIsFullscreen(true)}
-                  className="absolute top-2.5 right-2.5 bg-[#121417]/80 hover:bg-[#121417] border border-[#282d34] p-2 rounded-lg text-[#00F0FF] hover:scale-105 transition-all shadow-md cursor-pointer z-10"
-                  title="Zoom Fullscreen"
-                >
-                  <ZoomIn className="w-4 h-4" />
-                </button>
+              <div className="relative aspect-[3/4] rounded-2xl overflow-hidden border border-[#282d34] cursor-zoom-in group"
+                   onMouseMove={handleMouseMove}
+                   onMouseLeave={handleMouseLeave}
+                   onTouchStart={handleTouchMove}
+                   onTouchMove={handleTouchMove}
+                   onTouchEnd={handleTouchEnd}>
+                
+                {/* Zoom hint overlay indicator, disappears on hover */}
+                <div className="absolute top-3 right-3 bg-[#121417]/80 border border-[#282d34] p-2 rounded-xl text-slate-400 group-hover:opacity-0 transition-opacity z-20 pointer-events-none shadow-sm">
+                  <ZoomIn className="w-4 h-4 text-[#ADFF00]" />
+                </div>
 
                 {/* HUD CORNER BRACKETS */}
                 <div className="absolute inset-3 border border-white/5 pointer-events-none z-10 rounded-xl">
@@ -681,7 +704,14 @@ export default function LookViewer2D({
                 <img
                   src={images[selectedIdx]}
                   alt="Selected preview"
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover transition-transform"
+                  style={{
+                    ...zoomStyle,
+                    objectPosition: "top",
+                    transition: zoomStyle.transform === "scale(1)"
+                      ? "transform 0.25s cubic-bezier(0.16, 1, 0.3, 1)"
+                      : "transform 0.08s ease-out"
+                  }}
                 />
               </div>
    
@@ -699,7 +729,7 @@ export default function LookViewer2D({
                   className="w-full bg-[#121417] hover:bg-[#121417]/80 text-white font-headline tracking-widest uppercase py-4 rounded-2xl flex items-center justify-center gap-2 border border-[#282d34] transition-all text-xs font-bold cursor-pointer"
                 >
                   <Download className="w-4 h-4 text-slate-400" />
-                  DOWNLOAD FLAT 2D
+                  DOWNLOAD PHOTO
                 </button>
               </div>
             </div>
@@ -719,28 +749,6 @@ export default function LookViewer2D({
             </button>
           </div>
         </div>
-   
-        {/* Fullscreen modal zoom overlay */}
-        {isFullscreen && selectedIdx !== null && images[selectedIdx] && (
-          <div
-            className="fixed inset-0 bg-[#121417]/95 backdrop-blur-md flex items-center justify-center z-[9999] animate-fade-in cursor-zoom-out"
-            onClick={() => setIsFullscreen(false)}
-          >
-            <div className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 p-2.5 rounded-full text-white transition-all cursor-pointer">
-              <X className="w-6 h-6" />
-            </div>
-            <div
-              className="relative max-w-[90vw] max-h-[90vh] aspect-[3/4] rounded-3xl overflow-hidden border border-white/10 shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <img
-                src={images[selectedIdx]}
-                alt="Fullscreen look"
-                className="w-full h-full object-contain"
-              />
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

@@ -7,7 +7,10 @@ export const maxDuration = 60;
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ filename: string }> }) {
   const { filename } = await params;
-  const modalUrl = process.env.MODAL_API_URL || 'https://ehab-ayman-gh--fanstudio-worldcup-2026-serve.modal.run';
+  const isLocal = process.env.NODE_ENV === 'development' || req.headers.get('host')?.includes('localhost') || req.headers.get('host')?.includes('127.0.0.1');
+  const targetBackendUrl = isLocal 
+    ? 'http://127.0.0.1:5000' 
+    : (process.env.MODAL_API_URL || 'https://ehab-ayman-gh--fanstudio-worldcup-2026-serve.modal.run');
   
   const tmpCacheDir = path.join(os.tmpdir(), '.splat_cache');
   const cachePath = path.join(tmpCacheDir, filename);
@@ -31,8 +34,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ file
   
   // 2. Fetch from Modal
   try {
-    console.log(`Fetching splat from Modal: ${modalUrl}/api/download-3d/${filename}`);
-    const resp = await fetch(`${modalUrl}/api/download-3d/${filename}`);
+    console.log(`Fetching splat from: ${targetBackendUrl}/api/download-3d/${filename}`);
+    const resp = await fetch(`${targetBackendUrl}/api/download-3d/${filename}`);
     if (!resp.ok) {
       const errorText = await resp.text().catch(() => 'Unknown error');
       console.error(`Modal download-3d failed: ${resp.status} - ${errorText}`);

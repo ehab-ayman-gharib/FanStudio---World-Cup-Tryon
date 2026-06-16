@@ -5,11 +5,15 @@ import json
 import random
 import base64
 import requests
+import uuid
 from io import BytesIO
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
+
+# Global job status store
+jobs_cache = {}
 
 # Initialize FastAPI app
 app = FastAPI(title="FanStudio local API", description="Local API for World Cup 2026 FanStudio (connecting to local ComfyUI)")
@@ -55,8 +59,8 @@ TEAM_THEMES = {
 
 # Request/Response schemas
 class Generate2DRequest(BaseModel):
-    image: str  # Base64 string of selfie
-    team: str   # Selected country name
+    user_image: str  # Base64 string of selfie
+    kit_image: str   # Base64 string of kit reference
     prompt_override: str | None = None
     num_variations: int = 1
 
@@ -285,190 +289,147 @@ def health():
     }
 
 
-@app.post("/api/generate-2d")
-async def generate_2d(req: Generate2DRequest):
-    """Executes the FLUX + SAM3 workflow in ComfyUI."""
-    if not test_comfyui_connection():
-        raise HTTPException(status_code=503, detail=f"ComfyUI server at {COMFYUI_URL} is unreachable.")
-    
-    # 1. Validate kit reference image
+def run_generate_2d_task(job_id: str, req: Generate2DRequest):
     try:
-        kit_filename = get_kit_reference_filename(req.team)
-        kit_path = os.path.join(GARMENTS_DIR, kit_filename)
-        with open(kit_path, "rb") as f:
-            kit_bytes = f.read()
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Could not load kit reference for {req.team}: {str(e)}")
-    
-    # 2. Decode user selfie
-    try:
-        user_img_data = req.image
+        # 1. Decode kit reference image
+        kit_img_data = req.kit_image
+        if "," in kit_img_data:
+            kit_img_data = kit_img_data.split(",")[1]
+        kit_bytes = base64.b64decode(kit_img_data)
+        
+        # 2. Decode user selfie
+        user_img_data = req.user_image
         if "," in user_img_data:
             user_img_data = user_img_data.split(",")[1]
         user_img_bytes = base64.b64decode(user_img_data)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid user image base64 data: {str(e)}")
 
-    # 3. Upload images to ComfyUI
-    timestamp = int(time.time())
-    user_comfy_filename = f"user_selfie_{timestamp}.png"
-    kit_comfy_filename = f"kit_ref_{req.team.lower()}_{timestamp}.png"
-    
-    try:
+        # 3. Upload images to ComfyUI
+        timestamp = int(time.time())
+        user_comfy_filename = f"user_selfie_{timestamp}.png"
+        kit_comfy_filename = f"kit_ref_{timestamp}.png"
+        
         upload_image_to_comfy(user_img_bytes, user_comfy_filename)
         upload_image_to_comfy(kit_bytes, kit_comfy_filename)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to upload images to ComfyUI: {str(e)}")
 
-    # 4. Load FLUX workflow JSON
-    if not os.path.exists(FLUX_WORKFLOW_PATH):
-        raise HTTPException(status_code=500, detail=f"FLUX workflow file not found at: {FLUX_WORKFLOW_PATH}")
-        
-    with open(FLUX_WORKFLOW_PATH, "r") as f:
-        workflow = json.load(f)
+        # 4. Load FLUX workflow JSON
+        if not os.path.exists(FLUX_WORKFLOW_PATH):
+            raise Exception(f"FLUX workflow file not found at: {FLUX_WORKFLOW_PATH}")
+            
+        with open(FLUX_WORKFLOW_PATH, "r") as f:
+            workflow = json.load(f)
 
-    # 5. Inject parameters & run requests in parallel or sequence
-    # Since we need `num_variations` (default 4), let's run them.
-    # To run them, we queue requests with different seeds.
-    # We can execute them sequentially and collect the prompt_ids.
-    prompt_ids = []
-    
-    for i in range(req.num_variations):
-        # Create a deep copy of the workflow to avoid mutations across variations
-        run_workflow_data = json.loads(json.dumps(workflow))
-        
-        # Inject inputs into nodes
-        # Node "76" (LoadImage for user selfie)
-        if "76" in run_workflow_data:
-            run_workflow_data["76"]["inputs"]["image"] = user_comfy_filename
-            
-        # Node "360" (LoadImage for kit reference image)
-        if "360" in run_workflow_data:
-            run_workflow_data["360"]["inputs"]["image"] = kit_comfy_filename
-            
-        # Node "75:73" (RandomNoise) - Set unique random seed
-        if "75:73" in run_workflow_data:
-            run_workflow_data["75:73"]["inputs"]["noise_seed"] = random.randint(1, 10**15)
-            
-        # Node "75:74" (CLIPTextEncode - Positive prompt)
-        if "75:74" in run_workflow_data and req.prompt_override and req.prompt_override.strip():
-            run_workflow_data["75:74"]["inputs"]["text"] = req.prompt_override
+        # 5. Inject parameters & run requests in parallel or sequence
+        prompt_ids = []
+        for i in range(req.num_variations):
+            run_workflow_data = json.loads(json.dumps(workflow))
+            if "76" in run_workflow_data:
+                run_workflow_data["76"]["inputs"]["image"] = user_comfy_filename
+            if "360" in run_workflow_data:
+                run_workflow_data["360"]["inputs"]["image"] = kit_comfy_filename
+            if "75:73" in run_workflow_data:
+                run_workflow_data["75:73"]["inputs"]["noise_seed"] = random.randint(1, 10**15)
+            if "75:74" in run_workflow_data and req.prompt_override and req.prompt_override.strip():
+                run_workflow_data["75:74"]["inputs"]["text"] = req.prompt_override
 
-        try:
             p_id = requests.post(f"{COMFYUI_URL}/prompt", json={"prompt": run_workflow_data}).json()["prompt_id"]
             prompt_ids.append(p_id)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to submit prompt variation {i+1} to ComfyUI: {str(e)}")
 
-    # 6. Poll history and retrieve outputs
-    generated_images_base64 = []
-    for i, p_id in enumerate(prompt_ids):
-        try:
-            print(f"Waiting for prompt variation {i+1}/{len(prompt_ids)} (ID: {p_id})...")
+        # 6. Poll history and retrieve outputs
+        generated_images_base64 = []
+        for i, p_id in enumerate(prompt_ids):
             history_data = wait_for_prompt_completion(p_id)
-            
-            # Find output images. Node "9" is VAE Decode -> SaveImage of the output
-            # Node "368" is the concatenated 2x2 grid. Let's return Node "9" which is the clean generated image.
             outputs = history_data.get("outputs", {})
             save_node = "9"
             if save_node not in outputs and "368" in outputs:
-                save_node = "368" # fallback to grid if node 9 is missing
+                save_node = "368"
                 
             if save_node in outputs and "images" in outputs[save_node]:
                 filename = outputs[save_node]["images"][0]["filename"]
                 subfolder = outputs[save_node]["images"][0].get("subfolder", "")
                 img_type = outputs[save_node]["images"][0].get("type", "output")
                 
-                # Fetch image bytes
                 img_bytes = download_comfy_file(filename, img_type)
                 img_base64 = "data:image/png;base64," + base64.b64encode(img_bytes).decode("utf-8")
                 generated_images_base64.append(img_base64)
             else:
                 raise Exception("SaveImage node output not found in history.")
-        except Exception as e:
-            print(f"Error on variation {i+1}: {str(e)}")
-            # Return placeholder/empty or throw
-            raise HTTPException(status_code=500, detail=f"Error generating variation {i+1}: {str(e)}")
 
-    return {"images": generated_images_base64}
+        jobs_cache[job_id] = {
+            "status": "completed",
+            "result": {"images": generated_images_base64}
+        }
+    except Exception as e:
+        print(f"Error in generate-2d job {job_id}: {str(e)}")
+        jobs_cache[job_id] = {
+            "status": "failed",
+            "error": str(e)
+        }
 
-@app.post("/api/generate-3d")
-async def generate_3d(req: Generate3DRequest):
-    """Executes the Apple SHARP 3DGS workflow in ComfyUI."""
+@app.post("/api/generate-2d")
+async def generate_2d(req: Generate2DRequest, background_tasks: BackgroundTasks):
+    """Executes the FLUX + SAM3 workflow in ComfyUI asynchronously."""
     if not test_comfyui_connection():
         raise HTTPException(status_code=503, detail=f"ComfyUI server at {COMFYUI_URL} is unreachable.")
+    
+    job_id = str(uuid.uuid4())
+    jobs_cache[job_id] = {"status": "pending"}
+    background_tasks.add_task(run_generate_2d_task, job_id, req)
+    return {"status": "pending", "job_id": job_id}
 
-    # 1. Decode target image
+
+def run_generate_3d_task(job_id: str, req: Generate3DRequest):
     try:
+        # 1. Decode target image
         img_data = req.image
         if "," in img_data:
             img_data = img_data.split(",")[1]
         img_bytes = base64.b64decode(img_data)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid target image base64 data: {str(e)}")
 
-    # 2. Upload to ComfyUI
-    timestamp = int(time.time())
-    img_filename = f"sharp_input_{timestamp}.png"
-    try:
+        # 2. Upload to ComfyUI
+        timestamp = int(time.time())
+        img_filename = f"sharp_input_{timestamp}.png"
         upload_image_to_comfy(img_bytes, img_filename)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to upload target image to ComfyUI: {str(e)}")
 
-    # 3. Load SHARP workflow
-    if not os.path.exists(SHARP_WORKFLOW_PATH):
-        raise HTTPException(status_code=500, detail=f"SHARP workflow file not found at: {SHARP_WORKFLOW_PATH}")
-        
-    with open(SHARP_WORKFLOW_PATH, "r") as f:
-        workflow = json.load(f)
+        # 3. Load SHARP workflow
+        if not os.path.exists(SHARP_WORKFLOW_PATH):
+            raise Exception(f"SHARP workflow file not found at: {SHARP_WORKFLOW_PATH}")
+            
+        with open(SHARP_WORKFLOW_PATH, "r") as f:
+            workflow = json.load(f)
 
-    # 4. Inject target image into node "1"
-    if "1" in workflow:
-        workflow["1"]["inputs"]["image"] = img_filename
+        # 4. Inject target image into node "1"
+        if "1" in workflow:
+            workflow["1"]["inputs"]["image"] = img_filename
 
-    # 5. Run prompt
-    try:
+        # 5. Run prompt
         p_id = requests.post(f"{COMFYUI_URL}/prompt", json={"prompt": workflow}).json()["prompt_id"]
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to submit SHARP prompt to ComfyUI: {str(e)}")
 
-    # 6. Wait and download PLY file
-    try:
+        # 6. Wait and download PLY file
         print(f"Waiting for SHARP completion (ID: {p_id})...")
         history_data = wait_for_prompt_completion(p_id)
         outputs = history_data.get("outputs", {})
         
-        # Apple SHARP outputs the PLY file. Let's find node "5" or "4" which saves/previews the PLY.
-        # Let's inspect where the PLY filename is saved.
-        # In sharp_basic.json, Node "5" is SharpPredict which generates the PLY file.
-        # Let's scan history outputs for any keys matching "ply" or check node "5".
         ply_filename = None
         for node_id, node_output in outputs.items():
-            if "gussians" in node_output: # typo in some ComfyUI geompack wrappers
+            if "gussians" in node_output:
                 ply_filename = node_output["gussians"][0]["filename"]
                 break
             if "ply" in node_output:
                 ply_filename = node_output["ply"][0]["filename"]
                 break
             if "images" in node_output:
-                # Fallback, if it saves the ply under a custom format
                 for img in node_output["images"]:
                     if img["filename"].endswith(".ply"):
                         ply_filename = img["filename"]
                         break
         
-        # If not found directly, let's guess by looking at the output prefix from Node 5.
-        # Node 5 has output_prefix = "sharp". The file is saved inside ComfyUI output directory as sharp_000xx.ply.
         if not ply_filename:
-            # Look up standard geompack outputs or predict outputs
             if "5" in outputs and "ply" in outputs["5"]:
                 ply_filename = outputs["5"]["ply"][0]["filename"]
             elif "4" in outputs and "ply" in outputs["4"]:
                 ply_filename = outputs["4"]["ply"][0]["filename"]
         
-        # Let's fallback search if not in history keys:
         if not ply_filename:
-            # Let's check history and try to find any filename ending in .ply
             history_str = json.dumps(history_data)
             import re
             ply_matches = re.findall(r'"([^"\s]+\.ply)"', history_str)
@@ -476,7 +437,6 @@ async def generate_3d(req: Generate3DRequest):
                 ply_filename = ply_matches[0]
                 
         if not ply_filename:
-            # Let's raise an error or check output folder
             raise Exception("3D Gaussian Splat PLY filename not found in ComfyUI execution history.")
 
         # Download PLY from ComfyUI and convert to .splat format for the browser
@@ -493,12 +453,42 @@ async def generate_3d(req: Generate3DRequest):
         
         splat_url = f"/api/download-3d/{splat_filename}"
         
-        return {
-            "plyUrl": splat_url,
-            "filename": splat_filename
+        jobs_cache[job_id] = {
+            "status": "completed",
+            "result": {
+                "plyUrl": splat_url,
+                "filename": splat_filename
+            }
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generating or retrieving 3D splat: {str(e)}")
+        print(f"Error in generate-3d job {job_id}: {str(e)}")
+        jobs_cache[job_id] = {
+            "status": "failed",
+            "error": str(e)
+        }
+
+@app.post("/api/generate-3d")
+async def generate_3d(req: Generate3DRequest, background_tasks: BackgroundTasks):
+    """Executes the Apple SHARP 3DGS workflow in ComfyUI asynchronously."""
+    if not test_comfyui_connection():
+        raise HTTPException(status_code=503, detail=f"ComfyUI server at {COMFYUI_URL} is unreachable.")
+    
+    job_id = str(uuid.uuid4())
+    jobs_cache[job_id] = {"status": "pending"}
+    background_tasks.add_task(run_generate_3d_task, job_id, req)
+    return {"status": "pending", "job_id": job_id}
+
+@app.get("/api/job-status/{job_id}")
+async def job_status(job_id: str):
+    """Retrieves status and results of a running/completed background job."""
+    if job_id not in jobs_cache:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return jobs_cache[job_id]
+
+@app.get("/api/pre-warm")
+def pre_warm():
+    """Dummy endpoint matching Modal API pre-warming on page mount."""
+    return {"status": "ready"}
 
 @app.get("/api/download-3d/{filename}")
 def download_3d(filename: str):

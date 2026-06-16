@@ -3,7 +3,10 @@ import { NextRequest, NextResponse } from 'next/server';
 export const maxDuration = 60; // Set max duration to 60s for Vercel Hobby plan
 
 export async function POST(req: NextRequest) {
-  const modalUrl = process.env.MODAL_API_URL || 'https://ehab-ayman-gh--fanstudio-worldcup-2026-serve.modal.run';
+  const isLocal = process.env.NODE_ENV === 'development' || req.headers.get('host')?.includes('localhost') || req.headers.get('host')?.includes('127.0.0.1');
+  const targetBackendUrl = isLocal 
+    ? 'http://127.0.0.1:5000' 
+    : (process.env.MODAL_API_URL || 'https://ehab-ayman-gh--fanstudio-worldcup-2026-serve.modal.run');
   try {
     const body = await req.json();
     const { image } = body;
@@ -12,7 +15,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ detail: "Missing image parameter" }, { status: 400 });
     }
     
-    const resp = await fetch(`${modalUrl}/api/generate-3d`, {
+    const resp = await fetch(`${targetBackendUrl}/api/generate-3d`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -28,7 +31,7 @@ export async function POST(req: NextRequest) {
     const data = await resp.json();
     const filename = data.filename;
     return NextResponse.json({
-      plyUrl: `${modalUrl}/api/download-3d/${filename}`,
+      plyUrl: `${targetBackendUrl}/api/download-3d/${filename}`,
       filename: filename
     });
   } catch (e: any) {

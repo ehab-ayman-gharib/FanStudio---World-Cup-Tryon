@@ -27,34 +27,41 @@ function getKitReferenceFilename(teamName: string): string {
 }
 
 export async function POST(req: NextRequest) {
-  const modalUrl = process.env.MODAL_API_URL || 'https://ehab-ayman-gh--fanstudio-worldcup-2026-serve.modal.run';
+  const isLocal = process.env.NODE_ENV === 'development' || req.headers.get('host')?.includes('localhost') || req.headers.get('host')?.includes('127.0.0.1');
+  const targetBackendUrl = isLocal 
+    ? 'http://127.0.0.1:5000' 
+    : (process.env.MODAL_API_URL || 'https://ehab-ayman-gh--fanstudio-worldcup-2026-serve.modal.run');
   try {
     const body = await req.json();
-    const { image, team, prompt_override, num_variations } = body;
+    const { user_image, kit_image, image, team, prompt_override, num_variations } = body;
     
-    if (!image || !team) {
-      return NextResponse.json({ detail: "Missing image or team parameters" }, { status: 400 });
+    let finalUserImage = user_image || image;
+    let finalKitImage = kit_image;
+
+    if (!finalKitImage && team) {
+      // Load and base64-encode the garment image from public files
+      try {
+        const kitFilename = getKitReferenceFilename(team);
+        const kitPath = path.join(process.cwd(), 'public', 'garments', kitFilename);
+        const kitBytes = fs.readFileSync(kitPath);
+        finalKitImage = `data:image/webp;base64,${kitBytes.toString('base64')}`;
+      } catch (e: any) {
+        return NextResponse.json({ detail: `Could not load kit reference for ${team}: ${e.message}` }, { status: 400 });
+      }
     }
-    
-    // Load and base64-encode the garment image
-    let kitB64 = '';
-    try {
-      const kitFilename = getKitReferenceFilename(team);
-      const kitPath = path.join(process.cwd(), 'public', 'garments', kitFilename);
-      const kitBytes = fs.readFileSync(kitPath);
-      kitB64 = `data:image/webp;base64,${kitBytes.toString('base64')}`;
-    } catch (e: any) {
-      return NextResponse.json({ detail: `Could not load kit reference for ${team}: ${e.message}` }, { status: 400 });
+
+    if (!finalUserImage || !finalKitImage) {
+      return NextResponse.json({ detail: "Missing user_image or kit_image parameters" }, { status: 400 });
     }
-    
+
     const payload = {
-      user_image: image,
-      kit_image: kitB64,
+      user_image: finalUserImage,
+      kit_image: finalKitImage,
       prompt_override: prompt_override || null,
       num_variations: num_variations || 1
     };
     
-    const resp = await fetch(`${modalUrl}/api/generate-2d`, {
+    const resp = await fetch(`${targetBackendUrl}/api/generate-2d`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
