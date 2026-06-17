@@ -6,6 +6,30 @@ The web application features a premium slate/glassmorphic light interface, offic
 
 ---
 
+## 🧰 Core Tech Stack & Tools
+
+* **Frontend**: Next.js, React, Tailwind CSS, Lucide Icons.
+* **3D Rendering**: **SparkJS** (`@sparkjsdev/react-spark`) for lightning-fast, high-fidelity native WebGL rendering of compressed Gaussian Splats.
+* **Generative Pipeline**: **ComfyUI** acts as the AI backend orchestrator.
+* **AI Models**: **FLUX.2 Klein** (Image-to-Image Generation), **SAM 3.1** (Segment Anything for garment isolation), and **Apple SHARP** (Single-image to 3D Gaussian Splat reconstruction).
+* **Cloud Infrastructure**: **Modal** provides serverless, auto-scaling A100/L4 GPU containers with persistent shared network file systems.
+* **Backend API**: **FastAPI** (Python) for routing, and **Node.js** for intercepting and compressing 3D point clouds (`.ply` to `.spz`).
+
+---
+
+## 🗺️ Development Journey & Process
+
+Building FanStudio involved a multi-stage approach combining rapid UI prototyping, automated dataset generation, and state-of-the-art AI integration:
+
+1. **UI Prototyping**: We began by designing and generating the core frontend components and visual layout using [Google Stitch](https://stitch.withgoogle.com/).
+2. **National Teams Kit Previews**: To create the high-quality 3D garment previews for the initial team selector, we built a custom local ComfyUI workflow. This workflow leveraged [SAM 3](https://ai.meta.com/research/sam3/) text prompting to precisely segment team kits from reference images. We then used FLUX.2 Klein to generate professional, studio-quality fashion photoshoots. This was fully automated via a Python script that traversed folders containing reference images for each participating nation.
+3. **Personalized Avatar Generation**: For the user's custom kit generation, we designed a second ComfyUI workflow. This dynamically combines SAM 3 for clothing segmentation with [ControlNet DWPose](https://github.com/Fannovel16/comfyui_controlnet_aux) for precise pose estimation. These act as structural references for FLUX.2 Klein to generate a photorealistic, personalized result in the user's exact pose.
+4. **3D Gaussian Splat Generation**: To reconstruct the 2D personalized avatar into an immersive 3D scene, we integrated [Apple SHARP](https://github.com/apple/ml-sharp) (Single-image High-resolution 3DGS Reconstruction). SHARP accurately generates a 3D Gaussian Splat from the single generated image in under 30 seconds.
+5. **Interactive 3D Rendering**: For viewing the generated 3D Gaussian Splats in the browser, we utilized [SparkJS by WorldLabs](https://sparkjs.dev/). SparkJS is a phenomenal choice because it offers highly optimized WebGL rendering tailored specifically for Gaussian Splatting, enabling buttery-smooth 60fps performance on both desktop and mobile devices. Additionally, it supports native `.spz` format compression, seamless React integration via `@sparkjsdev/react-spark`, and built-in camera animation capabilities out of the box.
+6. **Cloud Hosting & GPU Compute**: To host and serve the massive ComfyUI generation pipelines globally, we deployed serverless GPU containers using [Modal](https://modal.com/pricing). Modal provides a generous $30 compute credit each month, making it an ideal choice for running on-demand generative AI workloads at scale without managing idle servers.
+
+---
+
 ## 🚀 Interactive Screens & Flow
 
 The FanStudio user interface is divided into a 4-step wizard that guides users through the generative pipeline:
@@ -31,11 +55,10 @@ The FanStudio user interface is divided into a 4-step wizard that guides users t
 
 ### 4. 3D Splat Studio (`Viewport3D`)
 * **Apple SHARP Reconstruction**: Converts the selected 2D avatar portrait into an interactive 3D Gaussian Splat.
-* **Fast PLY-to-Splat Conversion**: The backend parses the large 3DGS PLY data and converts it into a highly compressed, sorted `.splat` binary format using numpy structured arrays.
-* **Three.js / React Three Fiber Renderer**: Renders the volumetric splat directly in the browser via Canvas and `@react-three/drei`'s `Splat` loader.
-* **Interactive Control Deck**: Swipe to orbit, drag to rotate, or toggle between 2D and 3D preview modes.
-* **Smartphone Gyroscope Parallax**: Mobile visitors can enable gyroscope permissions. Tilting or rotating the phone shifts the camera viewport dynamically, producing a stunning volumetric depth-of-field parallax effect.
-* **Splat Downloader**: Download the compiled `.splat` model for standalone spatial players.
+* **PLY-to-SPZ Compression**: The backend intercepts the large uncompressed PLY data (66MB+) and uses a custom Node.js script (`scripts/ply_to_spz.mjs`) tapping into the `@sparkjsdev/spark` engine to drastically compress the model into the optimized `.spz` binary format (~16MB), eliminating loading delays.
+* **Spark.js / React-Spark Renderer**: Renders the volumetric splat directly in the browser via WebGL using the `@sparkjsdev/react-spark` library, ensuring maximum quality and rendering efficiency.
+* **Interactive Control Deck**: Swipe to orbit, drag to rotate, or toggle between 2D and 3D preview modes. An **Auto-Camera Animation** sequence automatically revolves around the model upon load.
+* **Splat Downloader**: Download the compiled `.spz` (or fallback `.ply`) model for standalone spatial players.
 
 ---
 
@@ -81,11 +104,15 @@ To run the application locally on your machine with a local GPU:
 
 ### Step B: Run the local Python FastAPI server
 1. Open a new terminal in the project directory.
-2. Install Python dependencies (including `numpy` for PLY-to-Splat parsing):
    ```bash
-   pip install fastapi uvicorn requests pillow pydantic numpy bs4
+   pip install fastapi uvicorn requests pydantic
    ```
-3. Run the local API server:
+3. Ensure you have Node.js installed, as the Python backend relies on a Node subprocess for 3D compression. Run:
+   ```bash
+   npm install
+   ```
+   *This installs `@sparkjsdev/spark` which is used by `scripts/ply_to_spz.mjs`.*
+4. Run the local API server:
    ```bash
    python scripts/local_api.py
    ```
