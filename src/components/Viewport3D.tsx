@@ -1,11 +1,83 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, Splat } from "@react-three/drei";
-import { Loader2, ArrowLeft, Download, Smartphone, RotateCcw, Eye, Box, AlertTriangle } from "lucide-react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { OrbitControls } from "@react-three/drei";
+import { Loader2, ArrowLeft, Download, Smartphone, RotateCcw, Eye, Box, AlertTriangle, Film } from "lucide-react";
 import * as THREE from "three";
+import { SparkRenderer, SplatMesh } from "@sparkjsdev/spark";
 import { API_BASE_URL } from "../config";
+//ss
+function SparkSceneRenderer() {
+  const { gl, scene } = useThree();
+  const sparkRenderer = useMemo(() => {
+    console.log("🎨 [SparkJS] Creating SparkRenderer instance");
+    const renderer = new SparkRenderer({ renderer: gl, sortRadial: true });
+    renderer.frustumCulled = false; // Disable culling so it always renders
+    return renderer;
+  }, [gl]);
+
+  useEffect(() => {
+    console.log("🔒 [SparkJS] Environment check:", {
+      crossOriginIsolated: window.crossOriginIsolated,
+      hasSharedArrayBuffer: typeof SharedArrayBuffer !== "undefined"
+    });
+
+    console.log("➕ [SparkJS] Adding SparkRenderer to scene");
+    scene.add(sparkRenderer);
+    return () => {
+      console.log("➖ [SparkJS] Removing SparkRenderer from scene");
+      scene.remove(sparkRenderer);
+      if (sparkRenderer && typeof (sparkRenderer as any).dispose === "function") {
+        (sparkRenderer as any).dispose();
+      }
+    };
+  }, [sparkRenderer, scene]);
+
+  useFrame((state) => {
+    if (sparkRenderer) {
+      sparkRenderer.update({ scene: state.scene, camera: state.camera })
+        .catch((err) => {
+          console.error("❌ [SparkJS] Renderer update failed:", err);
+        });
+    }
+  });
+
+  return null;
+}
+
+function SparkSplat({
+  url,
+  position = [0, -0.3, 0],
+  scale = 3.0
+}: {
+  url: string;
+  position?: [number, number, number];
+  scale?: number;
+}) {
+  const splatMesh = useMemo(() => {
+    console.log("🎨 [SparkJS] Creating SplatMesh instance:", url);
+    const mesh = new SplatMesh({ url });
+    mesh.frustumCulled = false;
+    return mesh;
+  }, [url]);
+
+  useEffect(() => {
+    return () => {
+      console.log("🧹 [SparkJS] Disposing SplatMesh");
+      splatMesh.dispose();
+    };
+  }, [splatMesh]);
+
+  return (
+    <group position={position} rotation={[Math.PI, 0, 0]}>
+      <group scale={scale}>
+        {/* Translate the raw avatar position [0, -0.5, 1.35] to center the chest/body at the local origin [0, 0, 0] */}
+        <primitive object={splatMesh} position={[0, 0.02, -1.35]} />
+      </group>
+    </group>
+  );
+}
 
 interface Viewport3DProps {
   selected2DImage: string;
@@ -46,19 +118,6 @@ function TiltingGroup({
   const groupRef = useRef<THREE.Group | null>(null);
 
   useFrame(() => {
-    // Re-enable auto-orbit if idle for 10 seconds
-    if (!autoOrbit && Date.now() - lastInteractionTime.current > 10000) {
-      setAutoOrbit(true);
-    }
-
-    if (controlsRef.current) {
-      const controls = controlsRef.current;
-      controls.target.x = THREE.MathUtils.lerp(controls.target.x, targetX, 0.05);
-      controls.target.y = THREE.MathUtils.lerp(controls.target.y, targetY, 0.05);
-      controls.target.z = THREE.MathUtils.lerp(controls.target.z, targetZ, 0.05);
-      controls.update();
-    }
-
     if (groupRef.current) {
       let targetRotY = gyroOffset.x * 0.4;
       let targetRotX = gyroOffset.y * 0.4;
@@ -66,8 +125,8 @@ function TiltingGroup({
       if (autoOrbit) {
         // Add a gentle 2D circular orbit (Lissajous path) for vertical and horizontal depth
         const elapsed = performance.now() / 1000;
-        targetRotY += Math.sin(elapsed * 1.5) * 0.18;
-        targetRotX += Math.cos(elapsed * 1.5) * 0.06;
+        targetRotY += Math.sin(elapsed * 0.6) * 0.10;
+        targetRotX += Math.cos(elapsed * 0.6) * 0.03;
       }
 
       // Smoothly lerp towards target gyro orientation
@@ -83,13 +142,15 @@ export default function Viewport3D({ selected2DImage, onBack, selectedTeam, onRe
   const [plyUrl, setPlyUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [recordCountdown, setRecordCountdown] = useState(5);
   const [gyroOffset, setGyroOffset] = useState({ x: 0, y: 0 });
   const [gyroPermission, setGyroPermission] = useState<"granted" | "denied" | "default">("default");
   const [show2D, setShow2D] = useState(false);
   const [autoOrbit, setAutoOrbit] = useState(true);
   const [targetX, setTargetX] = useState(0);
-  const [targetY, setTargetY] = useState(-1);
-  const [targetZ, setTargetZ] = useState(-2);
+  const [targetY, setTargetY] = useState(0);
+  const [targetZ, setTargetZ] = useState(0);
   const lastInteractionTime = useRef(Date.now());
   const hasTriggered = useRef(false);
 
@@ -97,10 +158,23 @@ export default function Viewport3D({ selected2DImage, onBack, selectedTeam, onRe
   useEffect(() => {
     setAutoOrbit(true);
     setTargetX(0);
-    setTargetY(-1);
-    setTargetZ(-2);
+    setTargetY(0);
+    setTargetZ(0);
     lastInteractionTime.current = Date.now();
   }, [plyUrl]);
+
+  // Re-enable auto-orbit after 8 seconds of inactivity
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!autoOrbit && Date.now() - lastInteractionTime.current > 8000) {
+        setAutoOrbit(true);
+        setTargetX(0);
+        setTargetY(0);
+        setTargetZ(0);
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [autoOrbit]);
 
   // Fetch PLY file from API
   useEffect(() => {
@@ -222,20 +296,21 @@ export default function Viewport3D({ selected2DImage, onBack, selectedTeam, onRe
   const handleResetView = () => {
     setAutoOrbit(true);
     setTargetX(0);
-    setTargetY(-1);
-    setTargetZ(-2);
+    setTargetY(0);
+    setTargetZ(0);
     lastInteractionTime.current = Date.now();
 
     if (controlsRef.current) {
+      const MathUtils = THREE.MathUtils;
       const controls = controlsRef.current;
       const camera = controls.object;
-      
-      // Reset camera position to [0, 2, -1.4]
-      camera.position.set(0, 2, -1.4);
-      
-      // Reset target to [0, -1, -2]
-      controls.target.set(0, -1, -2);
-      
+
+      // Reset camera position to [0, 0.75, 4.0]
+      camera.position.set(0, 2.0, 3.0);
+
+      // Reset target to [0, 0, 0]
+      controls.target.set(0, 0, 0);
+
       controls.update();
     }
   };
@@ -244,10 +319,92 @@ export default function Viewport3D({ selected2DImage, onBack, selectedTeam, onRe
     if (!plyUrl) return;
     const link = document.createElement("a");
     link.href = plyUrl;
-    link.download = "fanstudio_spatial_avatar.splat";
+    link.download = "fanstudio_spatial_avatar.ply";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleRecordVideo = async () => {
+    if (!controlsRef.current || recording) return;
+
+    try {
+      setRecording(true);
+      setRecordCountdown(5);
+
+      // 1. Reset camera view to ensure standard starting frame
+      handleResetView();
+
+      // 2. Wait 500ms for camera to settle and autoOrbit to engage
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const canvas = document.querySelector(".spark-canvas") as HTMLCanvasElement || 
+                     document.querySelector("canvas") as HTMLCanvasElement;
+
+      if (!canvas) {
+        throw new Error("WebGL Canvas element not found.");
+      }
+
+      // 3. Capture 30 FPS stream from canvas
+      const stream = canvas.captureStream(30);
+
+      // 4. Check browser MIME support
+      let mimeType = "video/webm;codecs=vp9";
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = "video/webm;codecs=vp8";
+      }
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = "video/webm";
+      }
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = "video/mp4";
+      }
+
+      const chunks: Blob[] = [];
+      const recorder = new MediaRecorder(stream, {
+        mimeType,
+        videoBitsPerSecond: 8000000 // 8 Mbps for high quality video output
+      });
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          chunks.push(e.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: mimeType });
+        const ext = mimeType.includes("mp4") ? "mp4" : "webm";
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `fanstudio_avatar_orbit.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        setRecording(false);
+      };
+
+      // 5. Start recording
+      recorder.start();
+
+      // 6. Countdown loop
+      let secondsLeft = 5;
+      const interval = setInterval(() => {
+        secondsLeft -= 1;
+        setRecordCountdown(secondsLeft);
+        if (secondsLeft <= 0) {
+          clearInterval(interval);
+          recorder.stop();
+        }
+      }, 1000);
+
+    } catch (err: any) {
+      console.error("Failed to record video:", err);
+      alert(`Could not record video: ${err.message || err}`);
+      setRecording(false);
+    }
   };
 
   const primaryColor = selectedTeam?.theme.colors[0] || "#00F0FF";
@@ -296,8 +453,8 @@ export default function Viewport3D({ selected2DImage, onBack, selectedTeam, onRe
       <div className="flex flex-col md:flex-row gap-8 items-center justify-center animate-fade-in relative mt-2 w-full">
         {/* 3D/2D Viewport Box with dynamic border color */}
         <div className="w-full max-w-sm aspect-[3/4] rounded-[32px] overflow-hidden border-2 shadow-2xl relative bg-[#121417] flex flex-col justify-between animate-fade-in-up"
-             style={{ borderColor: primaryColor, boxShadow: `0 0 30px ${primaryColor}20` }}>
-          
+          style={{ borderColor: primaryColor, boxShadow: `0 0 30px ${primaryColor}20` }}>
+
           {show2D ? (
             <div className="w-full h-full bg-[#121417] flex items-center justify-center p-4">
               <img
@@ -309,12 +466,16 @@ export default function Viewport3D({ selected2DImage, onBack, selectedTeam, onRe
           ) : (
             plyUrl && (
               <Canvas
-                camera={{ position: [0, 2, -1.4], fov: 45 }}
+                camera={{ position: [0, 2.0, 3.0], fov: 45 }}
+                gl={{ preserveDrawingBuffer: true, antialias: true }}
+                dpr={2}
                 className="w-full h-full bg-[#121417]"
               >
                 <ambientLight intensity={1.5} />
                 <directionalLight position={[5, 5, 5]} intensity={1.5} />
-                
+
+                <SparkSceneRenderer />
+
                 <TiltingGroup
                   gyroOffset={gyroOffset}
                   autoOrbit={autoOrbit}
@@ -325,28 +486,28 @@ export default function Viewport3D({ selected2DImage, onBack, selectedTeam, onRe
                   targetZ={targetZ}
                   controlsRef={controlsRef}
                 >
-                  <Splat src={plyUrl} scale={3} position={[0, -0.3, 0]} />
-                  
+                  <SparkSplat key={plyUrl} url={plyUrl} scale={2.4} position={[0, -0.3, 0]} />
+
                   {/* Invisible touch-to-focus collider mesh */}
                   <mesh
-                    position={[0, -1, -2]}
+                    position={[0, 0, 0]}
                     onClick={(e) => {
                       e.stopPropagation();
-                      
-                      // Clamp click coordinates relative to target center [0, -1, -2]
-                      const clickX = Math.max(-0.4, Math.min(0.4, e.point.x));
-                      const clickY = Math.max(-2.2, Math.min(0.2, e.point.y));
-                      const clickZ = Math.max(-2.5, Math.min(-1.5, e.point.z));
+
+                      // Clamp click coordinates relative to centered model
+                      const clickX = Math.max(-1.0, Math.min(1.0, e.point.x));
+                      const clickY = Math.max(-1.0, Math.min(1.0, e.point.y));
+                      const clickZ = Math.max(-1.0, Math.min(1.0, e.point.z));
 
                       setTargetX(clickX);
                       setTargetY(clickY);
                       setTargetZ(clickZ);
-                      
+
                       setAutoOrbit(false);
                       lastInteractionTime.current = Date.now();
                     }}
                   >
-                    <boxGeometry args={[1.5, 3.2, 0.5]} />
+                    <boxGeometry args={[2.0, 2.0, 2.0]} />
                     <meshBasicMaterial transparent opacity={0} depthWrite={false} />
                   </mesh>
                 </TiltingGroup>
@@ -357,12 +518,12 @@ export default function Viewport3D({ selected2DImage, onBack, selectedTeam, onRe
                   dampingFactor={0.05}
                   enablePan={false}
                   minDistance={2.0}
-                  maxDistance={3.5}
-                  minAzimuthAngle={-0.18}
-                  maxAzimuthAngle={0.18}
+                  maxDistance={6.0}
+                  minAzimuthAngle={-0.35}
+                  maxAzimuthAngle={0.35}
                   minPolarAngle={1.2}
                   maxPolarAngle={1.6}
-                  target={[0, -1, -2]}
+                  target={[0, 0, 0]}
                   onStart={() => {
                     setAutoOrbit(false);
                     lastInteractionTime.current = Date.now();
@@ -441,6 +602,18 @@ export default function Viewport3D({ selected2DImage, onBack, selectedTeam, onRe
               )}
             </button>
 
+            {/* Download Video Button */}
+            {!show2D && (
+              <button
+                onClick={handleRecordVideo}
+                disabled={recording}
+                className="w-full bg-[#FF007A] hover:bg-[#FF007A]/90 disabled:bg-[#FF007A]/50 text-white font-headline tracking-widest uppercase py-4 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-[#FF007A]/15 transition-all text-xs font-black cursor-pointer"
+              >
+                <Film className="w-4.5 h-4.5 text-white" />
+                {recording ? `RECORDING (${recordCountdown}s)` : "DOWNLOAD VIDEO"}
+              </button>
+            )}
+
             {/* Reset Camera Button */}
             {!show2D && (
               <button
@@ -459,7 +632,7 @@ export default function Viewport3D({ selected2DImage, onBack, selectedTeam, onRe
                 className="w-full bg-[#121417] hover:bg-[#121417]/80 text-white font-headline tracking-widest uppercase py-4 rounded-2xl flex items-center justify-center gap-2 border border-[#282d34] transition-all text-xs font-bold cursor-pointer"
               >
                 <Download className="w-4 h-4 text-slate-400" />
-                EXPORT 3D SPLAT
+                EXPORT 3D MODEL
               </button>
             ) : (
               <a

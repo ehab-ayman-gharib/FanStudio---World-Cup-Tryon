@@ -101,162 +101,6 @@ def download_comfy_file(filename: str, type: str = "output") -> bytes:
     resp.raise_for_status()
     return resp.content
 
-def ply_to_splat(input_bytes: bytes) -> bytes:
-    """
-    Converts a 3DGS PLY file to the compact .splat binary format that Three.js/drei can parse.
-    
-    .splat format per point (32 bytes):
-      - position: 3 × float32 (12 bytes)
-      - scale:    3 × float32 (12 bytes) 
-      - color:    4 × uint8   (4 bytes)  — RGBA
-      - rotation: 4 × uint8   (4 bytes)  — quaternion normalized to 0-255
-    """
-    try:
-        import numpy as np
-        
-        # Parse PLY header to extract properties and vertex count
-        header_end = b"end_header\n"
-        header_end_idx = input_bytes.find(header_end)
-        if header_end_idx == -1:
-            header_end = b"end_header\r\n"
-            header_end_idx = input_bytes.find(header_end)
-            
-        if header_end_idx == -1:
-            raise ValueError("No end_header found in PLY")
-            
-        header_bytes = input_bytes[:header_end_idx]
-        binary_bytes = input_bytes[header_end_idx + len(header_end):]
-        
-        header_text = header_bytes.decode('ascii', errors='ignore')
-        
-        num_vertices = 0
-        properties = []
-        
-        for line in header_text.splitlines():
-            line = line.strip()
-            if line.startswith("element vertex"):
-                num_vertices = int(line.split()[-1])
-            elif line.startswith("property"):
-                parts = line.split()
-                if len(parts) >= 3:
-                    prop_type = parts[1]
-                    prop_name = parts[2]
-                    
-                    # Map to numpy data types
-                    if prop_type in ("float", "float32"):
-                        np_type = "f4"
-                    elif prop_type in ("double", "float64"):
-                        np_type = "f8"
-                    elif prop_type in ("char", "int8"):
-                        np_type = "i1"
-                    elif prop_type in ("uchar", "uint8"):
-                        np_type = "u1"
-                    elif prop_type in ("short", "int16"):
-                        np_type = "i2"
-                    elif prop_type in ("ushort", "uint16"):
-                        np_type = "u2"
-                    elif prop_type in ("int", "int32"):
-                        np_type = "i4"
-                    elif prop_type in ("uint", "uint32"):
-                        np_type = "u4"
-                    else:
-                        np_type = "f4"
-                    properties.append((prop_name, np_type))
-                    
-        # Parse binary elements using numpy structured array (extremely fast!)
-        ply_dtype = np.dtype(properties)
-        expected_size = num_vertices * ply_dtype.itemsize
-        data_bytes = binary_bytes[:expected_size]
-        
-        vertex = np.frombuffer(data_bytes, dtype=ply_dtype)
-        total_vertex_count = len(vertex)
-        
-        # Extract positions
-        x = np.array(vertex['x'], dtype=np.float32)
-        y = np.array(vertex['y'], dtype=np.float32)
-        z = np.array(vertex['z'], dtype=np.float32)
-        
-        # Extract opacity (stored as logit in 3DGS PLY)
-        opacity_raw = np.array(vertex['opacity'], dtype=np.float32)
-        opacity = 1.0 / (1.0 + np.exp(-opacity_raw))  # sigmoid
-        
-        # Filter low-opacity points to reduce size
-        mask = opacity >= 0.05
-        x, y, z, opacity_raw, opacity = x[mask], y[mask], z[mask], opacity_raw[mask], opacity[mask]
-        
-        n_points = len(x)
-        print(f"⚡ Converting PLY to .splat: {n_points} points (filtered from {total_vertex_count})")
-        
-        # Extract scale (stored as log-scale in 3DGS PLY)
-        scale_0 = np.array(vertex['scale_0'], dtype=np.float32)[mask]
-        scale_1 = np.array(vertex['scale_1'], dtype=np.float32)[mask]
-        scale_2 = np.array(vertex['scale_2'], dtype=np.float32)[mask]
-        sx = np.exp(scale_0)
-        sy = np.exp(scale_1)
-        sz = np.exp(scale_2)
-        
-        # Extract rotation quaternion
-        rot_0 = np.array(vertex['rot_0'], dtype=np.float32)[mask]
-        rot_1 = np.array(vertex['rot_1'], dtype=np.float32)[mask]
-        rot_2 = np.array(vertex['rot_2'], dtype=np.float32)[mask]
-        rot_3 = np.array(vertex['rot_3'], dtype=np.float32)[mask]
-        # Normalize quaternion
-        qlen = np.sqrt(rot_0**2 + rot_1**2 + rot_2**2 + rot_3**2)
-        qlen = np.maximum(qlen, 1e-10)
-        rot_0 /= qlen
-        rot_1 /= qlen
-        rot_2 /= qlen
-        rot_3 /= qlen
-        
-        # Extract color from spherical harmonics DC component
-        SH_C0 = 0.28209479177387814
-        f_dc_0 = np.array(vertex['f_dc_0'], dtype=np.float32)[mask]
-        f_dc_1 = np.array(vertex['f_dc_1'], dtype=np.float32)[mask]
-        f_dc_2 = np.array(vertex['f_dc_2'], dtype=np.float32)[mask]
-        r = np.clip((0.5 + SH_C0 * f_dc_0) * 255, 0, 255).astype(np.uint8)
-        g = np.clip((0.5 + SH_C0 * f_dc_1) * 255, 0, 255).astype(np.uint8)
-        b = np.clip((0.5 + SH_C0 * f_dc_2) * 255, 0, 255).astype(np.uint8)
-        a = np.clip(opacity * 255, 0, 255).astype(np.uint8)
-        
-        # Encode quaternion to uint8 (map [-1, 1] to [0, 255])
-        rot_0_u8 = np.clip(((rot_0 + 1.0) * 0.5) * 255, 0, 255).astype(np.uint8)
-        rot_1_u8 = np.clip(((rot_1 + 1.0) * 0.5) * 255, 0, 255).astype(np.uint8)
-        rot_2_u8 = np.clip(((rot_2 + 1.0) * 0.5) * 255, 0, 255).astype(np.uint8)
-        rot_3_u8 = np.clip(((rot_3 + 1.0) * 0.5) * 255, 0, 255).astype(np.uint8)
-        
-        # Sort by scale (largest first) for better rendering
-        sizes = sx * sy * sz
-        sort_idx = np.argsort(-sizes)
-        
-        # Apply sort order to all arrays
-        x, y, z = x[sort_idx], y[sort_idx], z[sort_idx]
-        sx, sy, sz = sx[sort_idx], sy[sort_idx], sz[sort_idx]
-        r, g, b, a = r[sort_idx], g[sort_idx], b[sort_idx], a[sort_idx]
-        rot_0_u8, rot_1_u8 = rot_0_u8[sort_idx], rot_1_u8[sort_idx]
-        rot_2_u8, rot_3_u8 = rot_2_u8[sort_idx], rot_3_u8[sort_idx]
-        
-        # Build binary .splat buffer vectorized (32 bytes per point)
-        # Layout: [pos_x, pos_y, pos_z, scale_x, scale_y, scale_z] as float32 (24 bytes)
-        #         [r, g, b, a, rot0, rot1, rot2, rot3] as uint8 (8 bytes)
-        splat_dtype = np.dtype([
-            ('px', '<f4'), ('py', '<f4'), ('pz', '<f4'),
-            ('sx', '<f4'), ('sy', '<f4'), ('sz', '<f4'),
-            ('r', 'u1'), ('g', 'u1'), ('b', 'u1'), ('a', 'u1'),
-            ('q0', 'u1'), ('q1', 'u1'), ('q2', 'u1'), ('q3', 'u1'),
-        ])
-        splat_arr = np.empty(n_points, dtype=splat_dtype)
-        splat_arr['px'] = x; splat_arr['py'] = y; splat_arr['pz'] = z
-        splat_arr['sx'] = sx; splat_arr['sy'] = sy; splat_arr['sz'] = sz
-        splat_arr['r'] = r; splat_arr['g'] = g; splat_arr['b'] = b; splat_arr['a'] = a
-        splat_arr['q0'] = rot_0_u8; splat_arr['q1'] = rot_1_u8
-        splat_arr['q2'] = rot_2_u8; splat_arr['q3'] = rot_3_u8
-        
-        splat_bytes = splat_arr.tobytes()
-        print(f"✅ Converted to .splat: {len(input_bytes)/1024/1024:.1f}MB PLY → {len(splat_bytes)/1024/1024:.1f}MB .splat ({n_points} points)")
-        return splat_bytes
-    except Exception as e:
-        print(f"⚠️ PLY-to-splat conversion failed: {e}")
-        return input_bytes
 
 def get_kit_reference_filename(team_name: str) -> str:
     """Finds the garment preview image path from the public/garments folder."""
@@ -452,25 +296,22 @@ def run_generate_3d_task(job_id: str, req: Generate3DRequest):
         if not ply_filename:
             raise Exception("3D Gaussian Splat PLY filename not found in ComfyUI execution history.")
 
-        # Download PLY from ComfyUI and convert to .splat format for the browser
+        # Download PLY from ComfyUI and save locally
         ply_bytes = download_comfy_file(ply_filename, "output")
-        splat_bytes = ply_to_splat(ply_bytes)
         
-        # Save the converted .splat file locally for download endpoint
-        splat_filename = ply_filename.replace(".ply", ".splat")
-        splat_cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".splat_cache")
-        os.makedirs(splat_cache_dir, exist_ok=True)
-        splat_path = os.path.join(splat_cache_dir, splat_filename)
-        with open(splat_path, "wb") as sf:
-            sf.write(splat_bytes)
+        ply_cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".splat_cache")
+        os.makedirs(ply_cache_dir, exist_ok=True)
+        ply_path = os.path.join(ply_cache_dir, ply_filename)
+        with open(ply_path, "wb") as pf:
+            pf.write(ply_bytes)
         
-        splat_url = f"/api/download-3d/{splat_filename}"
+        ply_url = f"/api/download-3d/{ply_filename}"
         
         jobs_cache[job_id] = {
             "status": "completed",
             "result": {
-                "plyUrl": splat_url,
-                "filename": splat_filename
+                "plyUrl": ply_url,
+                "filename": ply_filename
             }
         }
     except Exception as e:
@@ -505,28 +346,28 @@ def pre_warm():
 
 @app.get("/api/download-3d/{filename}")
 def download_3d(filename: str):
-    """Serves the converted .splat file from the local cache."""
+    """Serves the model file (.ply) from the local cache."""
     try:
         splat_cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".splat_cache")
-        splat_path = os.path.join(splat_cache_dir, filename)
+        file_path = os.path.join(splat_cache_dir, filename)
         
-        if os.path.exists(splat_path):
-            with open(splat_path, "rb") as f:
-                splat_bytes = f.read()
+        # 1. If file exists in local cache, serve it directly
+        if os.path.exists(file_path):
+            with open(file_path, "rb") as f:
+                file_bytes = f.read()
             return Response(
-                content=splat_bytes,
+                content=file_bytes,
                 media_type="application/octet-stream",
                 headers={
                     "Content-Disposition": f"inline; filename={filename}",
                     "Cache-Control": "public, max-age=3600"
                 }
             )
-        # Fallback: try to fetch from ComfyUI and convert on the fly
-        ply_filename = filename.replace(".splat", ".ply")
-        ply_bytes = download_comfy_file(ply_filename, "output")
-        splat_bytes = ply_to_splat(ply_bytes)
+            
+        # 2. Fallback: try to fetch from ComfyUI
+        file_bytes = download_comfy_file(filename, "output")
         return Response(
-            content=splat_bytes,
+            content=file_bytes,
             media_type="application/octet-stream",
             headers={"Content-Disposition": f"inline; filename={filename}"}
         )
