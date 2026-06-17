@@ -49,15 +49,35 @@ function SparkSceneRenderer() {
 function SparkSplat({
   url,
   position = [0, -0.3, 0],
-  scale = 3.0
+  scale = 3.0,
+  onProgress,
+  onLoad
 }: {
   url: string;
   position?: [number, number, number];
   scale?: number;
+  onProgress?: (event: ProgressEvent) => void;
+  onLoad?: () => void;
 }) {
+  const onProgressRef = useRef(onProgress);
+  const onLoadRef = useRef(onLoad);
+  
+  useEffect(() => {
+    onProgressRef.current = onProgress;
+    onLoadRef.current = onLoad;
+  }, [onProgress, onLoad]);
+
   const splatMesh = useMemo(() => {
     console.log("🎨 [SparkJS] Creating SplatMesh instance:", url);
-    const mesh = new SplatMesh({ url });
+    const mesh = new SplatMesh({ 
+      url,
+      onProgress: (e) => {
+        if (onProgressRef.current) onProgressRef.current(e);
+      },
+      onLoad: () => {
+        if (onLoadRef.current) onLoadRef.current();
+      }
+    });
     mesh.frustumCulled = false;
     return mesh;
   }, [url]);
@@ -151,6 +171,8 @@ export default function Viewport3D({ selected2DImage, onBack, selectedTeam, onRe
   const [targetX, setTargetX] = useState(0);
   const [targetY, setTargetY] = useState(0);
   const [targetZ, setTargetZ] = useState(0);
+  const [modelLoaded, setModelLoaded] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
   const lastInteractionTime = useRef(Date.now());
   const hasTriggered = useRef(false);
 
@@ -315,11 +337,14 @@ export default function Viewport3D({ selected2DImage, onBack, selectedTeam, onRe
     }
   };
 
-  const downloadPly = () => {
+  const downloadModel = () => {
     if (!plyUrl) return;
+    const isSpz = plyUrl.endsWith('.spz');
+    const ext = isSpz ? 'spz' : 'ply';
+    
     const link = document.createElement("a");
     link.href = plyUrl;
-    link.download = "fanstudio_spatial_avatar.ply";
+    link.download = `fanstudio_spatial_avatar.${ext}`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -465,12 +490,26 @@ export default function Viewport3D({ selected2DImage, onBack, selectedTeam, onRe
             </div>
           ) : (
             plyUrl && (
-              <Canvas
-                camera={{ position: [0, 2.0, 3.0], fov: 45 }}
-                gl={{ preserveDrawingBuffer: true, antialias: true }}
-                dpr={2}
-                className="w-full h-full bg-[#121417]"
-              >
+              <>
+                {!modelLoaded && (
+                  <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#121417]/80 backdrop-blur-md animate-fade-in">
+                    <div className="w-12 h-12 rounded-full border-4 border-[#282d34] border-t-[#00F0FF] animate-spin mb-5 shadow-[0_0_15px_rgba(0,240,255,0.4)]" />
+                    <h4 className="text-white font-headline tracking-widest text-sm uppercase">
+                      DOWNLOADING MODEL
+                    </h4>
+                    {downloadProgress !== null && (
+                      <p className="text-[#ADFF00] font-label text-[10px] mt-2 tracking-wider">
+                        {downloadProgress}% COMPLETE
+                      </p>
+                    )}
+                  </div>
+                )}
+                <Canvas
+                  camera={{ position: [0, 2.0, 3.0], fov: 45 }}
+                  gl={{ preserveDrawingBuffer: true, antialias: true }}
+                  dpr={2}
+                  className="w-full h-full bg-[#121417]"
+                >
                 <ambientLight intensity={1.5} />
                 <directionalLight position={[5, 5, 5]} intensity={1.5} />
 
@@ -486,7 +525,18 @@ export default function Viewport3D({ selected2DImage, onBack, selectedTeam, onRe
                   targetZ={targetZ}
                   controlsRef={controlsRef}
                 >
-                  <SparkSplat key={plyUrl} url={plyUrl} scale={2.4} position={[0, -0.3, 0]} />
+                  <SparkSplat 
+                    key={plyUrl} 
+                    url={plyUrl} 
+                    scale={2.4} 
+                    position={[0, -0.3, 0]} 
+                    onProgress={(e) => {
+                      if (e.lengthComputable && e.total > 0) {
+                        setDownloadProgress(Math.round((e.loaded / e.total) * 100));
+                      }
+                    }}
+                    onLoad={() => setModelLoaded(true)}
+                  />
 
                   {/* Invisible touch-to-focus collider mesh */}
                   <mesh
@@ -534,6 +584,7 @@ export default function Viewport3D({ selected2DImage, onBack, selectedTeam, onRe
                   makeDefault
                 />
               </Canvas>
+              </>
             )
           )}
 
@@ -628,7 +679,7 @@ export default function Viewport3D({ selected2DImage, onBack, selectedTeam, onRe
             {/* Export Button */}
             {!show2D ? (
               <button
-                onClick={downloadPly}
+                onClick={downloadModel}
                 className="w-full bg-[#121417] hover:bg-[#121417]/80 text-white font-headline tracking-widest uppercase py-4 rounded-2xl flex items-center justify-center gap-2 border border-[#282d34] transition-all text-xs font-bold cursor-pointer"
               >
                 <Download className="w-4 h-4 text-slate-400" />

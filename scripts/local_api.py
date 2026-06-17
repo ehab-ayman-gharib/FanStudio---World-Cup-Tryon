@@ -134,8 +134,15 @@ def health():
 
 
 def free_comfyui_memory():
-    """Tells ComfyUI to unload unused models and free up GPU memory."""
+    """Tells ComfyUI to unload unused models and free up GPU memory, but only if idle."""
     try:
+        queue_resp = requests.get(f"{COMFYUI_URL}/queue", timeout=2)
+        if queue_resp.status_code == 200:
+            queue_data = queue_resp.json()
+            if len(queue_data.get("queue_running", [])) > 0 or len(queue_data.get("queue_pending", [])) > 0:
+                print("⏳ ComfyUI is busy. Skipping VRAM clear to prevent crashing active tasks.")
+                return
+
         requests.post(f"{COMFYUI_URL}/free", json={"unload_models": True, "free_memory": True}, timeout=3)
         print("🧹 Cleared ComfyUI VRAM and cache.")
     except Exception as e:
@@ -304,14 +311,28 @@ def run_generate_3d_task(job_id: str, req: Generate3DRequest):
         ply_path = os.path.join(ply_cache_dir, ply_filename)
         with open(ply_path, "wb") as pf:
             pf.write(ply_bytes)
+            
+        # Convert PLY to SPZ to save bandwidth (35MB -> 8MB)
+        import subprocess
+        spz_filename = ply_filename.replace(".ply", ".spz")
+        spz_path = os.path.join(ply_cache_dir, spz_filename)
+        node_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ply_to_spz.mjs")
         
-        ply_url = f"/api/download-3d/{ply_filename}"
+        try:
+            subprocess.run(["node", node_script, ply_path, spz_path], check=True)
+            print(f"Successfully converted {ply_filename} to {spz_filename}")
+            final_filename = spz_filename
+        except Exception as e:
+            print(f"Failed to transcode to SPZ: {e}, falling back to PLY.")
+            final_filename = ply_filename
+        
+        ply_url = f"/api/download-3d/{final_filename}"
         
         jobs_cache[job_id] = {
             "status": "completed",
             "result": {
                 "plyUrl": ply_url,
-                "filename": ply_filename
+                "filename": final_filename
             }
         }
     except Exception as e:

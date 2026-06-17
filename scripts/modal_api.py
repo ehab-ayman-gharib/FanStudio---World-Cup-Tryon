@@ -25,7 +25,9 @@ nfs = modal.NetworkFileSystem.from_name("fanstudio-shared-nfs", create_if_missin
 image = (
     modal.Image.debian_slim(python_version="3.10")
     .entrypoint([])
-    .apt_install("git", "libgl1", "libglib2.0-0", "wget", "libgomp1", "ffmpeg")
+    .apt_install("git", "libgl1", "libglib2.0-0", "wget", "libgomp1", "ffmpeg", "curl")
+    .run_commands("curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs")
+    .run_commands("npm install @sparkjsdev/spark --prefix /root/spark_tools")
     .run_commands(
         "pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121"
     )
@@ -262,6 +264,7 @@ class ComfyFLUXWorker:
     max_containers=1
 )
 class ComfySHARPWorker:
+    is_warmed_up = False
     @modal.enter()
     def start_comfy_server(self):
         import shutil
@@ -362,16 +365,80 @@ class ComfySHARPWorker:
 
         # Write straight to the shared NFS instead of encoding as big base64 payload here
         output_path = f"/root/ComfyUI/output/{ply_filename}"
-        shared_filename = f"sharp_{int(time.time())}_{random.randint(1000, 9999)}.ply"
+        
+        # Convert to SPZ format
+        spz_filename = ply_filename.replace(".ply", ".spz")
+        spz_output_path = f"/root/ComfyUI/output/{spz_filename}"
+        
+        js_code = """import fs from 'fs/promises';
+import { transcodeSpz } from '/root/spark_tools/node_modules/@sparkjsdev/spark/dist/spark.module.js';
+
+async function main() {
+    const inputPath = process.argv[2];
+    const outputPath = process.argv[3];
+    try {
+        const fileBytes = await fs.readFile(inputPath);
+        const result = await transcodeSpz({
+            inputs: [{ fileBytes: new Uint8Array(fileBytes), pathOrUrl: inputPath }]
+        });
+        await fs.writeFile(outputPath, Buffer.from(result.fileBytes));
+    } catch (err) {
+        console.error("Transcode failed", err);
+        process.exit(1);
+    }
+}
+main();"""
+        with open("/root/ply_to_spz.mjs", "w") as f:
+            f.write(js_code)
+            
+        import subprocess
+        try:
+            subprocess.run(["node", "/root/ply_to_spz.mjs", output_path, spz_output_path], check=True)
+            print(f"Successfully converted {ply_filename} to {spz_filename}")
+            final_output_path = spz_output_path
+            shared_filename = f"sharp_{int(time.time())}_{random.randint(1000, 9999)}.spz"
+        except Exception as e:
+            print(f"Failed to transcode to SPZ: {e}, falling back to PLY.")
+            final_output_path = output_path
+            shared_filename = f"sharp_{int(time.time())}_{random.randint(1000, 9999)}.ply"
+
         os.makedirs("/shared", exist_ok=True)
         shared_path = f"/shared/{shared_filename}"
         
-        with open(output_path, "rb") as f_in:
+        with open(final_output_path, "rb") as f_in:
             with open(shared_path, "wb") as f_out:
                 f_out.write(f_in.read())
                 
+        ComfySHARPWorker.is_warmed_up = True
         return shared_filename
 
+    @modal.method()
+    def warmup(self) -> str:
+        if ComfySHARPWorker.is_warmed_up:
+            print("♻️ SHARP worker is already warm, skipping dummy run.")
+            return "ok"
+            
+        global SHARP_WORKFLOW_RAW
+        if not SHARP_WORKFLOW_RAW:
+            load_workflows()
+        
+        from PIL import Image
+        from io import BytesIO
+        img = Image.new("RGB", (256, 256), color="gray")
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        dummy_bytes = buf.getvalue()
+        
+        try:
+            print("🔥 Pre-warming SHARP worker models (dummy run)...")
+            workflow = json.loads(SHARP_WORKFLOW_RAW)
+            
+            self.process.local(dummy_bytes, json.dumps(workflow))
+            ComfySHARPWorker.is_warmed_up = True
+            print("⚡ SHARP worker is fully warm!")
+        except Exception as e:
+            print(f"⚠️ SHARP pre-warming failed: {e}")
+        return "ok"
 
 
 # --- 5. FASTAPI CPU ROUTER TIER ---
@@ -394,6 +461,9 @@ def pre_warm():
     flux_worker = ComfyFLUXWorker()
     # Spawn enqueues the task on Modal's cloud queue instantly, starting the GPU instance in the background
     flux_worker.warmup.spawn()
+    
+    sharp_worker = ComfySHARPWorker()
+    sharp_worker.warmup.spawn()
     return {"status": "warming"}
 
 # Host workflow definitions inside the CPU router to read and inject
